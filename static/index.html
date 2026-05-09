@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocTranslate — Photo Translation & Document Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=20260504">
+</head>
+<body>
+
+<div class="app-wrap">
+
+    <!-- ============ HEADER ============ -->
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <svg class="brand-icon" width="34" height="34" viewBox="0 0 34 34" fill="none">
+                    <rect width="34" height="34" rx="10" fill="#4361ee"/>
+                    <path d="M8 14h12M8 18h16M8 22h10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+                    <circle cx="26" cy="22" r="6" fill="#4895ef" stroke="#fff" stroke-width="1.5"/>
+                    <path d="M25 20l2 3 3-3.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="brand-name">DocTranslate</span>
+            </div>
+            <div class="header-meta">
+                <span class="status-light" id="statusDot"></span>
+                <span class="status-txt" id="statusLabel">Checking…</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============ MAIN ============ -->
+    <main class="app-main">
+
+        <!-- ------- UPLOAD SECTION ------- -->
+        <section id="uploadSection" class="section section-upload">
+            <div class="upload-card">
+                <div class="upload-icon-row">
+                    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+                        <rect x="6" y="10" width="44" height="36" rx="8" stroke="#4361ee" stroke-width="2.5"/>
+                        <circle cx="28" cy="26" r="8" stroke="#4361ee" stroke-width="2"/>
+                        <path d="M16 40l6-8 5 6 8-10 10 12" stroke="#4361ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M36 12V6a2 2 0 00-2-2H22a2 2 0 00-2 2v6" stroke="#4361ee" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h2 class="upload-heading">Translate any photo instantly</h2>
+                <p class="upload-sub">Snap a sign, menu, document, or label. Get the translation and what it means.</p>
+
+                <div class="upload-btns">
+                    <label class="btn-photo" id="chooseBtn" role="button" tabindex="0">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 12l3-4 2 2L12 7l3 5M2 2h14a2 2 0 012 2v10a2 2 0 01-2 2H2a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="currentColor" stroke-width="1.5"/></svg>
+                        Choose photo
+                    </label>
+                    <button class="btn-camera" id="cameraBtn">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 12a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"/><path d="M2 4h3l2-3h4l2 3h3a2 2 0 012 2v7a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="currentColor" stroke-width="1.5"/></svg>
+                        Take photo
+                    </button>
+                </div>
+                <input type="file" id="fileInput" accept=".png,.jpg,.jpeg" hidden>
+
+                <div class="file-chip" id="fileInfo">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span>No photo selected</span>
+                </div>
+
+                <div class="lang-picker">
+                    <label class="lang-label">Translate to</label>
+                    <div class="lang-select-wrap">
+                        <select class="lang-select" id="targetLanguage">
+                            <option value="en">English</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                            <option value="it">Italiano</option>
+                            <option value="pt">Português</option>
+                            <option value="zh-CN">中文</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="uploadBtn">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v10M5 7l4-5 4 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v3a2 2 0 002 2h10a2 2 0 002-2v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    Upload &amp; Translate
+                </button>
+                <div id="uploadStatus" class="msg-bar"></div>
+            </div>
+        </section>
+
+        <!-- ------- PROCESSING SECTION ------- -->
+        <section id="processingSection" class="section section-processing hidden">
+            <div class="processing-card">
+                <div class="processing-spinner">
+                    <svg width="42" height="42" viewBox="0 0 42 42" fill="none">
+                        <circle cx="21" cy="21" r="18" stroke="#e9ecef" stroke-width="3"/>
+                        <path d="M21 3a18 18 0 0118 18" stroke="#4361ee" stroke-width="3" stroke-linecap="round">
+                            <animateTransform attributeName="transform" type="rotate" from="0 21 21" to="360 21 21" dur="1s" repeatCount="indefinite"/>
+                        </path>
+                    </svg>
+                </div>
+                <h3 class="processing-title" id="progressText">Starting…</h3>
+                <p class="processing-hint">This usually takes 5–10 seconds</p>
+
+                <div class="steps">
+                    <div class="step" data-step="0">
+                        <span class="step-dot"></span>
+                        <span class="step-label">Upload</span>
+                    </div>
+                    <div class="step-conn"></div>
+                    <div class="step" data-step="1">
+                        <span class="step-dot"></span>
+                        <span class="step-label">Read</span>
+                    </div>
+                    <div class="step-conn"></div>
+                    <div class="step" data-step="2">
+                        <span class="step-dot"></span>
+                        <span class="step-label">Translate</span>
+                    </div>
+                    <div class="step-conn"></div>
+                    <div class="step" data-step="3">
+                        <span class="step-dot"></span>
+                        <span class="step-label">Explain</span>
+                    </div>
+                </div>
+
+                <div class="skeletons" id="skeletonGroup">
+                    <div class="skel-card">
+                        <div class="skel-line w40"></div>
+                        <div class="skel-line w85"></div>
+                    </div>
+                    <div class="skel-card">
+                        <div class="skel-line w50"></div>
+                        <div class="skel-line w100"></div>
+                        <div class="skel-line w70"></div>
+                    </div>
+                    <div class="skel-card">
+                        <div class="skel-line w35"></div>
+                        <div class="skel-line w90"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ------- RESULTS SECTION ------- -->
+        <section id="resultsSection" class="section section-results hidden">
+
+            <!-- Photo preview -->
+            <div class="preview-box" id="imagePreviewContainer">
+                <div class="preview-empty">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="4" y="8" width="32" height="24" rx="4" stroke="#ced4da" stroke-width="2"/><circle cx="20" cy="18" r="5" stroke="#ced4da" stroke-width="2"/><path d="M12 29l5-6 4 4 6-9 7 11" stroke="#ced4da" stroke-width="2" stroke-linecap="round"/></svg>
+                </div>
+            </div>
+
+            <!-- Language bar -->
+            <div class="lang-bar">
+                <span class="lang-tag" id="sourceLanguage">Auto-detected</span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="#adb5bd" stroke-width="1.5"/></svg>
+                <span class="lang-tag" id="targetLanguageBadge">English</span>
+                <div class="lang-bar-spacer"></div>
+                <button class="btn-icon" id="newPhotoBtn" title="New photo">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+                <button class="btn-icon" id="refreshBtn" title="Refresh status">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M14 9a5 5 0 01-9.2 2.8M4 9a5 5 0 019.2-2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 3v4h-4M4 15v-4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+
+            <!-- Card: Document / Image Summary -->
+            <div id="documentSummary" class="card hidden">
+                <div class="card-head">
+                    <span class="card-title">Document / Image Summary</span>
+                    <span class="doc-pill" id="documentTypeBadge">Image</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-field">
+                        <span class="field-label">Type</span>
+                        <p class="field-text" id="documentType">—</p>
+                    </div>
+                    <div class="card-field">
+                        <span class="field-label">Summary</span>
+                        <p class="field-text" id="documentSummaryText">—</p>
+                    </div>
+
+                    <div id="keyDetailsSection" class="card-field hidden">
+                        <span class="field-label">Key Details</span>
+                        <div id="keyDetails" class="kd-grid"></div>
+                    </div>
+
+                    <div id="suggestedActionsSection" class="card-field hidden">
+                        <span class="field-label">Suggested Next Steps</span>
+                        <div id="suggestedActions" class="action-list"></div>
+                    </div>
+
+                    <div id="confidenceNotesSection" class="hidden">
+                        <div class="note" id="confidenceNotes"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Translation -->
+            <div class="card" id="translationCard">
+                <div class="card-head">
+                    <span class="card-title">Translation</span>
+                </div>
+                <div class="card-body">
+                    <div class="trans-box" id="translatedText">
+                        <span class="empty-state">Translation will appear here</span>
+                    </div>
+                    <div class="trans-tools">
+                        <button class="btn-tool" id="copyTranslationBtn">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1 4v8a1 1 0 001 1h7" stroke="currentColor" stroke-width="1.3"/></svg>
+                            Copy
+                        </button>
+                        <button class="btn-tool" id="speakTranslationBtn">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 5h2l3-3v10L4 9H2V5z" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.5a3 3 0 010 5M10 2a6 6 0 010 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                            Speak
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Explanation -->
+            <div class="card" id="explanationCard">
+                <div class="card-head">
+                    <span class="card-title">Explanation</span>
+                </div>
+                <div class="card-body">
+                    <div class="expl-box" id="explanation">
+                        <span class="empty-state">Explanation will appear here</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Retake helper -->
+            <div id="retakeHelper" class="retake-card hidden">
+                <div class="retake-head">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#e67700" stroke-width="1.5"/><path d="M10 6v4M10 13v.5" stroke="#e67700" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <span>Needs a clearer photo</span>
+                </div>
+                <p class="retake-msg">The text in this photo is too blurry for accurate translation.</p>
+                <h6 class="tips-label">Tips for a better photo:</h6>
+                <div id="retakeTips" class="tips-list"></div>
+                <div class="retake-actions">
+                    <button class="btn-primary btn-sm" id="retakePhotoBtn">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h3l2-3h2l2 3h3a2 2 0 012 2v5a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="9" r="2.5" stroke="currentColor" stroke-width="1.5"/></svg>
+                        Retake photo
+                    </button>
+                    <button class="btn-ghost" id="tryAnywayBtn">Try anyway</button>
+                </div>
+            </div>
+
+            <!-- Retranslate bar -->
+            <div class="retry-bar">
+                <div class="retry-select-wrap">
+                    <select class="retry-select" id="retryTargetLanguage">
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                        <option value="de">Deutsch</option>
+                        <option value="it">Italiano</option>
+                        <option value="pt">Português</option>
+                        <option value="zh-CN">中文</option>
+                    </select>
+                </div>
+                <button class="btn-ghost btn-sm" id="retryTranslateBtn">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 7a4 4 0 01-7.4 2.2M3 7a4 4 0 017.4-2.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11 2v3H8M3 12V9h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Re-translate
+                </button>
+                <button class="btn-ghost btn-sm" id="tryAnywayBtn2">Try only</button>
+            </div>
+
+        </section>
+    </main>
+</div>
+
+<script src="app.js?v=20260504"></script>
+</body>
+</html>

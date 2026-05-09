@@ -1,0 +1,5 @@
+[build]
+  builder = "DOCKERFILE"
+
+[nixpacks]
+  aptPkgs = ["tesseract-ocr", "tesseract-ocr-eng", "tesseract-ocr-fra", "tesseract-ocr-ita", "tesseract-ocr-deu", "tesseract-ocr-por", "tesseract-ocr-spa", "tesseract-ocr-chi-sim", "libgl1-mesa-glx", "libglib2.0-0", "libsm6", "libxext6", "libxrender-dev", "libgomp1", "libxcb1", "libxcb-shm0", "libxcb-render0", "libxcb-xfixes0"]
