@@ -19,7 +19,9 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Header
+import uuid
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Header, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -28,7 +30,7 @@ from pydantic import BaseModel
 load_dotenv()
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s UTC %(levelname)-7s %(name)s %(message)s')
 logger = logging.getLogger(__name__)
 
 # Debug flag for verbose OCR logging
@@ -1180,14 +1182,15 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
 
 # Endpoints
 @app.get("/")
-async def root_redirect():
+async def root_redirect(request: Request):
     """Redirect root to the frontend app"""
+    logger.info("Root redirect: / -> /static/index.html")
     from starlette.responses import RedirectResponse
     return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Simple health check endpoint"""
     return {"status": "ok"}
 
@@ -1202,17 +1205,20 @@ MAX_TEXT_BYTES = 5 * 1024 * 1024
 @app.post("/documents/upload", response_model=DocumentResponse)
 async def upload_document(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    request: Request = None
 ):
     """Upload a document for processing"""
     
     # Validate filename
     if not file.filename:
+        logger.warning("Upload rejected: no filename provided")
         raise HTTPException(status_code=400, detail="Filename is required")
     
     # Validate file extension
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
+        logger.warning(f"Upload rejected: unsupported type '{file_ext}' for '{file.filename}'")
         raise HTTPException(
             status_code=422,
             detail=f"Unsupported file type '{file_ext}'. Allowed: .txt, .png, .jpg, .jpeg"
@@ -1223,6 +1229,7 @@ async def upload_document(
         ct_lower = file.content_type.lower()
         if file_ext in ALLOWED_IMAGE_MIMES:
             if ct_lower not in ALLOWED_IMAGE_MIMES and "octet-stream" not in ct_lower:
+                logger.warning(f"Upload rejected: MIME mismatch '{file.content_type}' for extension '{file_ext}'")
                 raise HTTPException(
                     status_code=422,
                     detail=f"Content-Type '{file.content_type}' does not match file extension '{file_ext}'"
@@ -1247,6 +1254,8 @@ async def upload_document(
     doc_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     source_type = get_source_type_from_filename(file.filename)
+    
+    logger.info(f"Upload accepted: id={doc_id[:8]}... name={file.filename} type={source_type} size={file_size}")
     
     document = Document(
         id=doc_id,
@@ -1277,8 +1286,10 @@ async def upload_document(
 async def list_documents(x_admin_key: str = Header(None)):
     """List all uploaded documents (admin only — requires X-Admin-Key header)"""
     if x_admin_key != DEMO_ADMIN_KEY:
+        logger.warning("List-documents attempt without valid admin key")
         raise HTTPException(status_code=403, detail="Not authorized")
     documents = load_documents()
+    logger.info(f"List-documents: returning {len(documents)} docs")
     return documents
 
 
@@ -1287,7 +1298,9 @@ async def get_document(document_id: str):
     """Get a specific document by ID (used by frontend to poll processing status)"""
     document = get_document_by_id(document_id)
     if document is None:
+        logger.info(f"Get-document miss: id={document_id}")
         raise HTTPException(status_code=404, detail="Document not found")
+    logger.debug(f"Get-document hit: id={document_id[:8]}... status={document.status}")
     return document
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 MYMEMORY_EMAIL = os.getenv("MYMEMORY_EMAIL")
@@ -1905,13 +1918,17 @@ async def translate_document(document_id: str, request: TranslationRequest):
     
     doc = get_document_by_id(document_id)
     if doc is None:
+        logger.info(f"Translate miss: id={document_id}")
         raise HTTPException(status_code=404, detail="Document not found")
 
     if not doc.extracted_text or doc.extracted_text.strip() == "":
+        logger.warning(f"Translate blocked: no extracted text for doc {document_id}")
         raise HTTPException(
             status_code=400,
             detail="Cannot translate: no OCR text available for this document."
         )
+    
+    logger.info(f"Translate start: doc={document_id[:8]}... lang={request.source_language_hint or 'auto'}->{request.target_language}")
     
     # Check if OCR quality is low
     is_low_quality = is_low_quality_ocr(
