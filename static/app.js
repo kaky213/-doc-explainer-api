@@ -4,6 +4,9 @@ class DocTranslateApp {
   constructor() {
     this.currentDocumentId = null;
     this.pollTimer = null;
+    this.pollStart = null;
+    this.pollElapsedTimer = null;
+    this.POLL_TIMEOUT_MS = 90000;  // 90 sec max wait
     this.autoTranslateTriggered = false;
 
     this.initEls();
@@ -122,12 +125,16 @@ class DocTranslateApp {
       const fd = new FormData();
       fd.append('file', f);
       const r = await fetch('/documents/upload', { method:'POST', body:fd });
-      if (!r.ok) throw new Error(`Upload failed (${r.status})`);
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}));
+        throw new Error(errBody.detail || `Upload failed (${r.status})`);
+      }
       const doc = await r.json();
       this.currentDocumentId = doc.id;
       this.autoTranslateTriggered = false;
       this.setStep(1);
       this.progressText.textContent = 'Reading text from image…';
+      this.startElapsedTimer();
       this.startPoll();
     } catch(e) {
       console.error(e);
@@ -141,7 +148,41 @@ class DocTranslateApp {
     this.processingSection.classList.remove('hidden');
     this.resultsSection.classList.add('hidden');
     this.stepEls.forEach(s => s.classList.remove('active','completed'));
+    this.elapsedTimeEl = document.getElementById('elapsedTime');
+    if (this.elapsedTimeEl) this.elapsedTimeEl.textContent = '';
     this.msg('', '');
+  }
+
+  startElapsedTimer() {
+    this.pollStart = Date.now();
+    clearInterval(this.pollElapsedTimer);
+    this.pollElapsedTimer = setInterval(() => {
+      if (!this.pollStart) return;
+      const elapsed = Math.floor((Date.now() - this.pollStart) / 1000);
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      if (this.elapsedTimeEl) {
+        this.elapsedTimeEl.textContent = mins > 0
+          ? `${mins}m ${secs}s`
+          : `${secs}s`;
+      }
+      // Show subtle warning after 45s
+      const badge = document.querySelector('.poll-time-badge');
+      if (badge) {
+        if (elapsed > 45) {
+          badge.classList.add('poll-warn');
+          this.progressText.textContent = 'Still reading text — large images may take longer…';
+        } else {
+          badge.classList.remove('poll-warn');
+        }
+      }
+    }, 1000);
+  }
+
+  stopElapsedTimer() {
+    clearInterval(this.pollElapsedTimer);
+    this.pollElapsedTimer = null;
+    if (this.elapsedTimeEl) this.elapsedTimeEl.textContent = '';
   }
 
   setStep(idx) {
@@ -157,13 +198,27 @@ class DocTranslateApp {
     this.pollTimer = setInterval(() => this.poll(), 2000);
   }
 
-  stopPoll() { clearInterval(this.pollTimer); this.pollTimer = null; }
+  stopPoll() { clearInterval(this.pollTimer); this.pollTimer = null; this.stopElapsedTimer(); }
 
   async poll() {
     if (!this.currentDocumentId) return;
+    
+    // Check timeout
+    if (this.pollStart && (Date.now() - this.pollStart) > this.POLL_TIMEOUT_MS) {
+      this.stopPoll();
+      this.progressText.textContent = 'Reading timed out';
+      this.msg('The server took too long to process this image. Please try a smaller or clearer photo.', 'err');
+      this.reset();
+      return;
+    }
+    
     try {
       const r = await fetch(`/documents/${this.currentDocumentId}`);
-      if (!r.ok) throw new Error(`Poll failed (${r.status})`);
+      if (!r.ok) {
+        // Don't stop polling on transient network errors — just log and retry
+        console.warn(`Poll transient failure: ${r.status} for ${this.currentDocumentId}`);
+        return;
+      }
       const d = await r.json();
       if (d.status === 'completed') {
         this.stopPoll();
@@ -172,12 +227,15 @@ class DocTranslateApp {
         this.onOcrDone(d);
       } else if (d.status === 'failed') {
         this.stopPoll();
-        this.msg('Unable to read text from this image', 'err');
+        this.msg('Unable to read text from this image. Try a clearer photo.', 'err');
         this.reset();
       } else {
         this.progressText.textContent = 'Reading text from image…';
       }
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.warn('Poll network error (will retry):', e.message);
+      // Don't stop or show error — transient network blips are common
+    }
   }
 
   async onOcrDone(doc) {

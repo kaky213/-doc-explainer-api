@@ -494,3 +494,10 @@ img{max-width:100%;height:auto;display:block}
   .preview-box{height:260px}
   .retake-actions{flex-direction:row}
 }
+
+/* Poll elapsed time badge */
+.poll-time-badge{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 8px;border-radius:12px;background:#e9ecef;color:#495057;font-size:12px;font-weight:600;white-space:nowrap;transition:background .2s,color .2s}
+.poll-time-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:#69db7c;animation:pulse 1.5s infinite}
+.poll-warn{background:#fff3bf;color:#e67700}
+.poll-warn::before{background:#fab005}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
