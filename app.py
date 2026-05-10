@@ -1120,7 +1120,7 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                         logger.info(f"  - Language: {detected_language}")
                         logger.info(f"  - Confidence: {best.get('confidence')}")
                         logger.info(f"  - Quality: {best.get('quality')}")
-                        logger.info(f"  - Text preview: {best_text[:100]}...")
+                        logger.info(f"  - Text length: {len(best_text)} chars")
                         
                         # Log timing for successful OCR (no translation yet)
                         total_time = (time.time() - start_time) * 1000
