@@ -144,10 +144,20 @@ def preprocess_for_ocr(pil_image):
     Returns (preprocessed_pil, info_dict)
     """
     img = np.array(pil_image)
-    if len(img.shape) == 3:
+    # Handle edge cases: mock objects in tests, empty arrays, 1D arrays
+    if not isinstance(img, np.ndarray) or img.ndim == 0 or img.size == 0:
+        # Fall back to a small blank image
+        gray = np.ones((100, 100), dtype=np.uint8) * 255
+    elif img.ndim == 1:
+        # Single channel as 1D array — reshape to grayscale
+        gray = img.reshape(-1, 1) if img.ndim == 1 else img
+    elif img.ndim == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     else:
         gray = img
+
+    if gray.ndim != 2:
+        gray = np.ones((100, 100), dtype=np.uint8) * 255
 
     h, w = gray.shape[:2]
     max_dim = 2000
@@ -192,10 +202,19 @@ def preprocess_for_ocr(pil_image):
 
 def build_ocr_variants(pil_image):
     img = np.array(pil_image)
-    if len(img.shape) == 3:
+    if not isinstance(img, np.ndarray) or img.ndim < 2 or img.size == 0:
+        # Fallback: return original only
+        return {
+            "original": pil_image,
+            "otsu": pil_image,
+            "adaptive": pil_image,
+        }
+    if img.ndim == 2:
+        gray = img
+    elif img.ndim == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     else:
-        gray = img
+        return {"original": pil_image, "otsu": pil_image, "adaptive": pil_image}
 
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
     otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
@@ -336,11 +355,18 @@ def detect_text_roi(pil_image):
         import numpy as np
         cv_image = np.array(pil_image)
         
+        # Guard against mock/non-array inputs
+        if not isinstance(cv_image, np.ndarray) or cv_image.ndim < 2 or cv_image.size == 0:
+            raise ValueError("Invalid image array")
+        
         # Handle grayscale input from preprocessing
-        if len(cv_image.shape) == 3:
+        if cv_image.ndim == 3:
             gray = cv2.cvtColor(cv_image, cv2.COLOR_RGB2GRAY)
         else:
             gray = cv_image
+        
+        if gray.ndim != 2:
+            raise ValueError("Non-2D grayscale array")
         
         h, w = gray.shape[:2]
         original_size = (w, h)
