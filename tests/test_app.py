@@ -212,9 +212,8 @@ def test_upload_image_file_ocr_dependencies_missing(client, monkeypatch):
     import app
     monkeypatch.setattr(app, 'OCR_AVAILABLE', False)
     
-    # Create a test image file
-    test_content = b"fake image data"
-    test_file = ("test.jpeg", test_content, "image/jpeg")
+    # Upload a real PNG
+    test_file = ("test.png", _create_real_png_bytes(), "image/png")
     
     response = client.post("/documents/upload", files={"file": test_file})
     assert response.status_code == 200
@@ -230,16 +229,6 @@ def test_upload_image_file_ocr_dependencies_missing(client, monkeypatch):
     assert processed_doc["explanation"] is not None
     assert "pytesseract" in processed_doc["explanation"].lower()
     assert "install" in processed_doc["explanation"].lower()
-
-
-def test_upload_unsupported_file_type(client):
-    """Test unsupported file type is handled predictably (marked as failed)."""
-    # Create a test PDF file (unsupported)
-    test_content = b"%PDF-1.4 fake pdf content"
-    test_file = ("test.pdf", test_content, "application/pdf")
-    
-    response = client.post("/documents/upload", files={"file": test_file})
-    assert response.status_code == 200
     
     doc_id = response.json()["id"]
     
@@ -247,15 +236,26 @@ def test_upload_unsupported_file_type(client):
     processed_doc = wait_for_processing(client, doc_id)
     assert processed_doc is not None, "Processing did not complete in time"
     
-    # Check processing results
+    # Check processing results - should be failed with dependency message
     assert processed_doc["status"] == DocumentStatus.FAILED.value
-    assert processed_doc["extracted_text"] is None
-    assert processed_doc["translated_text"] is None
     assert processed_doc["explanation"] is not None
-    assert "not supported" in processed_doc["explanation"].lower()
-    # Should mention supported types
-    assert ".txt" in processed_doc["explanation"].lower()
-    assert ".png" in processed_doc["explanation"].lower() or ".jpg" in processed_doc["explanation"].lower()
+    assert "pytesseract" in processed_doc["explanation"].lower()
+    assert "install" in processed_doc["explanation"].lower()
+
+
+def test_upload_unsupported_file_type(client):
+    """Test unsupported file type is rejected at upload (422)."""
+    # Create a test PDF file (unsupported)
+    test_content = b"%PDF-1.4 fake pdf content"
+    test_file = ("test.pdf", test_content, "application/pdf")
+    
+    response = client.post("/documents/upload", files={"file": test_file})
+    assert response.status_code == 422
+    error = response.json()
+    assert "Unsupported file type" in error["detail"]
+    # Should mention supported types in the error message
+    assert ".txt" in error["detail"].lower()
+    assert ".png" in error["detail"].lower() or ".jpg" in error["detail"].lower()
 
 
 def test_upload_document_no_filename(client):
@@ -283,24 +283,23 @@ def test_list_documents_empty(client):
 
 def test_list_documents_with_processing(client, monkeypatch):
     """Test GET /documents shows documents with updated processing fields."""
-    # Mock OCR for image processing
-    mock_tesseract = MagicMock()
-    mock_tesseract.image_to_string.return_value = "Image text content"
-    
-    mock_image = MagicMock()
-    mock_image.open.return_value = mock_image
-    
-    # Monkey patch the module-level imports
     import app
+    # Mock pytesseract for image processing
+    mock_tesseract = MagicMock()
+    mock_tesseract.image_to_data.return_value = {
+        "text": ["Image", "text", "content", ""],
+        "line_num": [0, 0, 0, 0],
+        "left": [0, 50, 100, 0],
+        "conf": ["90", "85", "92", "-1"]
+    }
+    
     monkeypatch.setattr(app, 'pytesseract', mock_tesseract)
-    monkeypatch.setattr(app, 'Image', mock_image)
     monkeypatch.setattr(app, 'OCR_AVAILABLE', True)
     
     # Upload multiple files with different types
     files = [
         ("doc1.txt", b"First text document", "text/plain"),
-        ("doc2.pdf", b"Fake PDF content", "application/pdf"),
-        ("image.png", b"Fake image", "image/png")
+        ("image.png", _create_real_png_bytes(), "image/png"),
     ]
     
     uploaded_ids = []
@@ -309,6 +308,7 @@ def test_list_documents_with_processing(client, monkeypatch):
             "/documents/upload",
             files={"file": (filename, content, content_type)}
         )
+        assert response.status_code == 200, f"Upload {filename} failed: {response.status_code}"
         uploaded_ids.append(response.json()["id"])
     
     # Wait for all processing to complete
@@ -324,15 +324,12 @@ def test_list_documents_with_processing(client, monkeypatch):
     assert response.status_code == 200
     documents = response.json()
     
-    assert len(documents) == 3
+    assert len(documents) == 2
     
-    # Check processing statuses
+    # Check processing statuses — both should be completed
     statuses = [doc["status"] for doc in documents]
-    # .txt and .png should be completed, .pdf should be failed
     completed_count = sum(1 for s in statuses if s == DocumentStatus.COMPLETED.value)
-    failed_count = sum(1 for s in statuses if s == DocumentStatus.FAILED.value)
-    assert completed_count == 2  # .txt and .png
-    assert failed_count == 1     # .pdf
+    assert completed_count == 2
     
     # Verify all documents have appropriate fields set
     for doc in documents:
@@ -436,27 +433,26 @@ def test_uploaded_file_persisted(client):
 
 def test_document_source_type_detection(client, monkeypatch):
     """Test that source_type is correctly detected from file extension."""
-    # Mock OCR for image processing
-    mock_tesseract = MagicMock()
-    mock_tesseract.image_to_string.return_value = "Image text"
-    
-    mock_image = MagicMock()
-    mock_image.open.return_value = mock_image
-    
-    # Monkey patch the module-level imports
     import app
+    from PIL import Image as PILImage
+    # Mock pytesseract for image processing
+    mock_tesseract = MagicMock()
+    mock_tesseract.image_to_data.return_value = {
+        "text": ["Image", "text", ""],
+        "line_num": [0, 0, 0],
+        "left": [0, 50, 0],
+        "conf": ["90", "85", "-1"]
+    }
+    
     monkeypatch.setattr(app, 'pytesseract', mock_tesseract)
-    monkeypatch.setattr(app, 'Image', mock_image)
     monkeypatch.setattr(app, 'OCR_AVAILABLE', True)
     
-    # Test different file types
+    # Test different file types (only supported ones — unsupported are rejected at upload)
     test_cases = [
         ("document.txt", b"Text content", "text/plain", "text_file"),
-        ("image.png", b"Fake image", "image/png", "image_file"),
-        ("photo.jpg", b"Fake photo", "image/jpeg", "image_file"),
-        ("picture.jpeg", b"Fake picture", "image/jpeg", "image_file"),
-        ("document.pdf", b"PDF content", "application/pdf", "unsupported"),
-        ("data.csv", b"CSV data", "text/csv", "unsupported"),
+        ("image.png", _create_real_png_bytes(), "image/png", "image_file"),
+        ("photo.jpg", _create_real_png_bytes(), "image/jpeg", "image_file"),
+        ("picture.jpeg", _create_real_png_bytes(), "image/jpeg", "image_file"),
     ]
     
     for filename, content, content_type, expected_source_type in test_cases:
@@ -472,6 +468,15 @@ def test_document_source_type_detection(client, monkeypatch):
         doc_id = document["id"]
         processed_doc = wait_for_processing(client, doc_id)
         assert processed_doc is not None, f"Processing did not complete for {filename}"
+
+    # Also test that unsupported files are rejected at upload
+    for filename, content, content_type in [
+        ("document.pdf", b"PDF content", "application/pdf"),
+        ("data.csv", b"CSV data", "text/csv"),
+    ]:
+        test_file = (filename, content, content_type)
+        response = client.post("/documents/upload", files={"file": test_file})
+        assert response.status_code == 422, f"Expected 422 for {filename}, got {response.status_code}"
 
 
 def test_static_files_served(client):
@@ -532,20 +537,18 @@ def test_translate_document_happy_path(client):
 
 def test_translate_document_no_extracted_text(client):
     """Test POST /documents/{id}/translate returns 400 when no extracted text."""
-    # Upload a PDF (unsupported file type)
-    test_content = b"%PDF-1.4 fake pdf content"
-    test_file = ("test.pdf", test_content, "application/pdf")
+    # Upload an empty text file (valid type, no content)
+    test_file = ("empty.txt", b"", "text/plain")
     
     response = client.post("/documents/upload", files={"file": test_file})
     assert response.status_code == 200
     
     doc_id = response.json()["id"]
     
-    # Wait for processing to complete (will fail)
+    # Wait for processing to complete
     processed_doc = wait_for_processing(client, doc_id)
     assert processed_doc is not None, "Processing did not complete in time"
-    assert processed_doc["status"] == "failed"
-    assert processed_doc["extracted_text"] is None
+    assert processed_doc["extracted_text"] == ""
     
     # Try to translate - should fail with 400
     translate_request = {

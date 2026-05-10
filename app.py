@@ -1192,6 +1192,13 @@ async def health_check():
     return {"status": "ok"}
 
 
+# Allowed file extensions and corresponding MIME types
+ALLOWED_EXTENSIONS = {'.txt', '.png', '.jpg', '.jpeg'}
+ALLOWED_IMAGE_MIMES = {'image/png', 'image/jpeg'}
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_TEXT_BYTES = 5 * 1024 * 1024
+
+
 @app.post("/documents/upload", response_model=DocumentResponse)
 async def upload_document(
     background_tasks: BackgroundTasks,
@@ -1199,21 +1206,37 @@ async def upload_document(
 ):
     """Upload a document for processing"""
     
-    # Validate file
+    # Validate filename
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required")
     
+    # Validate file extension
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported file type '{file_ext}'. Allowed: .txt, .png, .jpg, .jpeg"
+        )
+    
+    # Validate content type when present
+    if file.content_type:
+        ct_lower = file.content_type.lower()
+        if file_ext in ALLOWED_IMAGE_MIMES:
+            if ct_lower not in ALLOWED_IMAGE_MIMES and "octet-stream" not in ct_lower:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Content-Type '{file.content_type}' does not match file extension '{file_ext}'"
+                )
+    
     # Check file size (max 10MB for images, 5MB for text)
-    MAX_IMAGE_BYTES = 10 * 1024 * 1024
-    MAX_TEXT_BYTES = 5 * 1024 * 1024
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
-    is_image = any(file.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg'])
+    is_image = file_ext in {'.png', '.jpg', '.jpeg'}
     if is_image and file_size > MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=400, detail=f"Photo is too large ({file_size / 1024 / 1024:.0f}MB). For faster processing, resize to under {MAX_IMAGE_BYTES / 1024 / 1024:.0f}MB or take a smaller photo.")
+        raise HTTPException(status_code=413, detail=f"Photo is too large ({file_size / 1024 / 1024:.0f}MB). Maximum is {MAX_IMAGE_BYTES / 1024 / 1024:.0f}MB.")
     if not is_image and file_size > MAX_TEXT_BYTES:
-        raise HTTPException(status_code=400, detail=f"Document is too large ({file_size / 1024 / 1024:.0f}MB). Text files must be under {MAX_TEXT_BYTES / 1024 / 1024:.0f}MB.")
+        raise HTTPException(status_code=413, detail=f"Document is too large ({file_size / 1024 / 1024:.0f}MB). Text files must be under {MAX_TEXT_BYTES / 1024 / 1024:.0f}MB.")
     
     # Save uploaded file
     stored_path = save_uploaded_file(file)
