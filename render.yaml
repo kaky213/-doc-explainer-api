@@ -1,0 +1,19 @@
+# DocTranslate — Deploy to Render
+# https://render.com/docs/infrastructure-as-code
+
+services:
+  - type: web
+    name: doc-explainer-api
+    runtime: image
+    repo: https://github.com/kaky213/-doc-explainer-api.git
+    region: oregon
+    plan: free
+    envVars:
+      - key: ADMIN_KEY
+        value: change-me-in-production
+      - key: DEMO_ADMIN_KEY
+        value: change-me-in-production
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health
+    autoDeploy: true
