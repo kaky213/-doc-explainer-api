@@ -1234,10 +1234,8 @@ async def list_documents(x_admin_key: str = Header(None)):
 
 
 @app.get("/documents/{document_id}", response_model=DocumentResponse)
-async def get_document(document_id: str, x_admin_key: str = Header(None)):
-    """Get a specific document by ID (admin only — requires X-Admin-Key header)"""
-    if x_admin_key != DEMO_ADMIN_KEY:
-        raise HTTPException(status_code=403, detail="Not authorized")
+async def get_document(document_id: str):
+    """Get a specific document by ID (used by frontend to poll processing status)"""
     document = get_document_by_id(document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
