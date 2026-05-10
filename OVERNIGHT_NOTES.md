@@ -110,3 +110,56 @@
 | Poll UX | Silent forever on failure | **90s timeout + elapsed timer + warning state** |
 | Deploy config | None | `render.yaml` IaaC + auto-deploy from main |
 | Live URL | https://doc-explainer-api-lapb.onrender.com/ | ✅ Same URL, verified functional |
+
+---
+
+### 🔧 Iteration 6: Developer experience & safety audit
+
+**Changes:**
+- `Makefile` (new): DocTranslate-specific targets — `venv`, `install`, `test`, `test-quick` (with 5s timeout), `run`, `run-docker`, `clean`, `deploy-check`, `.env`
+- `.env.example` (new): DocTranslate-specific env vars — `ADMIN_KEY`, `DEMO_ADMIN_KEY`, `DEEPSEEK_API_KEY`, `MYMEMORY_EMAIL`, `PORT`, `LOG_LEVEL`
+- `manage.sh`: Fixed stale "API Docs" URL reference; added `test` command (runs pytest with pass-through args)
+- `app.py`: Reduced log exposure — replaced `best_text[:100]` text preview log with `len(best_text) chars` count
+
+**Safety audit results:**
+- ✅ `/documents` (list-all) — protected by `X-Admin-Key` header
+- ✅ `/documents/{id}` (single doc) — public, safe by UUID
+- ✅ `/docs` / ReDoc — disabled (`docs_url=None`, `redoc_url=None`)
+- ✅ No API keys logged anywhere
+- ✅ All extracted text logs use truncated IDs (`id[:8]...`), no full text leaked
+- ✅ No sensitive env vars in log output
+
+**Result:** 23/23 tests passing (19 from tests/ + 4 from external test_refined_analysis.py).
+
+**Commit:** `fdf938e`
+
+---
+
+## End-of-night summary
+
+### What changed (all 6 iterations)
+
+| # | Area | Summary |
+|---|------|---------|
+| 1 | **Tests** | 19 tests green, fixed 5 failing, real PIL fixtures |
+| 2 | **Validation** | File ext/MIME/size checks with proper HTTP codes |
+| 3 | **Logging** | Structured format, all endpoints log, id-truncated |
+| 4 | **Frontend UX** | 90s poll timeout, elapsed timer, transient-error resilience |
+| 5 | **Deploy** | `render.yaml`, cache-bust bump |
+| 6 | **DX + Safety** | Makefile, .env.example, manage.sh upgrades, log exposure reduction |
+
+### Open questions for you (@Fermin)
+1. **DEEPSEEK_API_KEY** — Do you want to add this to the Render env vars? The app uses it for AI translation/explanation. Without it, MyMemory is used (free tier, rate-limited).
+2. **ADMIN_KEY** — Currently set to `change-me-in-production` in both .env.example and Render. Need a real secret before production use.
+3. **Single-document endpoint** — Made public per earlier decision. Are you still comfortable with that? Currently any UUID can retrieve any doc.
+
+### Tests status
+- **23 total** (19 in tests/test_app.py, 4 in test_refined_analysis.py)
+- **23 pass, 0 fail** ✅
+- **No flaky tests detected** — all pass consistently
+
+### Recommended next steps
+1. Add real `ADMIN_KEY` + `DEEPSEEK_API_KEY` to Render env vars
+2. Consider adding rate limiting or a simple token for /documents/{id} if public access is a concern
+3. Add a test for the poll-timeout scenario (integration test with slow mock)
+4. Set up UptimeRobot or similar to keep Render from sleeping on free tier
