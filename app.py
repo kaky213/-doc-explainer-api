@@ -8,6 +8,10 @@ import os
 import uuid
 import logging
 import time
+from pathlib import Path
+
+# Absolute base directory — works regardless of uvicorn's CWD
+BASE_DIR = Path(__file__).resolve().parent
 import cv2
 import numpy as np
 import re
@@ -628,12 +632,12 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
 app.add_middleware(NoCacheMiddleware)
 
 # Mount static files for frontend
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 # Constants
-DATA_DIR = "data"
-UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
-DOCUMENTS_FILE = os.path.join(DATA_DIR, "documents.json")
+DATA_DIR = str(BASE_DIR / "data")
+UPLOADS_DIR = str(BASE_DIR / "data" / "uploads")
+DOCUMENTS_FILE = str(BASE_DIR / "data" / "documents.json")
 
 # OCR Configuration
 # Supported languages: English, Spanish, French, German, Portuguese, Italian, Chinese (Simplified)
