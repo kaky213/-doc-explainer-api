@@ -1275,8 +1275,22 @@ async def root_redirect(request: Request):
 
 @app.get("/health")
 async def health_check(request: Request):
-    """Simple health check endpoint"""
-    return {"status": "ok"}
+    """
+    Health check endpoint.
+    Returns minimal non-sensitive configuration info for operational clarity.
+    """
+    return {
+        "status": "healthy",
+        "config": {
+            "deepseek": "enabled" if os.getenv("DEEPSEEK_API_KEY") else "disabled",
+            "admin_key": "set" if os.getenv("DEMO_ADMIN_KEY") and os.getenv("DEMO_ADMIN_KEY") != "change-me-in-production" else "default",
+            "ocr": "available" if OCR_AVAILABLE else "unavailable",
+        },
+        "upload": {
+            "max_mb": 10,
+            "formats": ["txt", "jpg", "jpeg", "png"],
+        },
+}
 
 
 # Allowed file extensions and corresponding MIME types
@@ -1994,12 +2008,20 @@ def analyze_document_content_sync(extracted_text: str) -> dict:
     """
     Sync wrapper around analyze_document_content for use in background tasks.
     Uses a fresh event loop so it doesn't interfere with FastAPI's event loop.
+    Logs whether the result came from DeepSeek (ENABLED) or heuristic (DISABLED).
     """
     import asyncio
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
-        return loop.run_until_complete(analyze_document_content(extracted_text))
+        result = loop.run_until_complete(analyze_document_content(extracted_text))
+        # Log analysis source without leaking document content
+        doc_type = result.get("document_type", "unknown") or "unknown"
+        source = "DeepSeek" if os.getenv("DEEPSEEK_API_KEY") else "heuristic"
+        logger.info(f"Document analysis result: type={doc_type}, source={source}, "
+                    f"summary={'present' if result.get('document_summary') else 'none'}, "
+                    f"key_details={len(result.get('key_details') or [])} items")
+        return result
     finally:
         loop.close()
 

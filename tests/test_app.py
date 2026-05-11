@@ -59,7 +59,12 @@ def test_health_endpoint(client):
     response = client.get("/health")
     
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert "config" in data
+    assert data["config"]["deepseek"] in ("enabled", "disabled")
+    assert data["config"]["admin_key"] in ("set", "default")
+    assert data["config"]["ocr"] in ("available", "unavailable")
 
 
 def test_upload_document(client):

@@ -357,4 +357,44 @@ The app now completes end-to-end within the 90s poll timeout even for worst-case
 
 **Result:** 19/19 tests passing, 0 deprecation warnings.
 
-**Commit:** `<pending>` 
+**Commit:** `017445d`
+
+---
+
+### 🔧 Iteration 10: Final demo polish — health config, analysis logging, env var cleanup (2026-05-11)
+
+**Changes made:**
+
+#### 1. `/health` enriched with non-sensitive config summary
+- **Before**: `{"status": "ok"}`
+- **After**:
+```json
+{
+  "status": "healthy",
+  "config": {
+    "deepseek": "enabled" | "disabled",
+    "admin_key": "set" | "default",
+    "ocr": "available" | "unavailable"
+  },
+  "upload": {
+    "max_mb": 10,
+    "formats": ["txt", "jpg", "jpeg", "png"]
+  }
+}
+```
+- Safe for public exposure — no secrets, no internal paths.
+- Updated test assertion to match new shape.
+
+#### 2. Analysis source logging
+- Added structured log line in `analyze_document_content_sync()`:
+  `Document analysis result: type=<doc_type>, source=DeepSeek|heuristic, summary=present|none, key_details=N items`
+- No document content leaked — only metadata.
+- Makes it obvious in Render logs whether heuristic vs LLM analysis ran.
+
+#### 3. `.env.example` cleaned up
+- Removed stale `ADMIN_KEY` variable (referenced nowhere in code).
+- Code only uses `DEMO_ADMIN_KEY`. Docs and config now match.
+
+**Result:** 19/19 tests passing, all green.
+
+**Commit:** `<pending>`
