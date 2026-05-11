@@ -445,6 +445,16 @@ Document explanation is powered by **DeepSeek Chat** (`deepseek-chat` model).
 - Go to your service Dashboard → Environment → Add `DEEPSEEK_API_KEY`.
 - The service will pick it up on next deployment.
 
+### ☑️ Deployment Checklist
+
+Before deploying to production:
+- [ ] Set `DEEPSEEK_API_KEY` environment variable in Render dashboard
+- [ ] Set `DEMO_ADMIN_KEY` to a secure random string (at least 32 chars)
+- [ ] Verify `/health` returns `{"status":"healthy"}`
+- [ ] Verify `/documents` returns 403 without `X-Admin-Key` header
+- [ ] Verify `/documents/{id}` returns a document by its UUID (public read)
+- [ ] Check startup logs confirm "DeepSeek: ENABLED" and "Admin Key: SET"
+
 ### Scaling
 - Use Gunicorn with Uvicorn workers
 - Implement database connection pooling

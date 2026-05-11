@@ -320,4 +320,41 @@ The app now completes end-to-end within the 90s poll timeout even for worst-case
 
 **Result:** 19/19 tests passing (unchanged, no regressions).
 
+**Commit:** `b1ee2a9`
+
+---
+
+### 🔧 Iteration 9b: Post-deployment polish (2026-05-11)
+
+**Changes made:**
+
+#### 1. Startup configuration log (operational awareness)
+- Added `lifespan` async context manager with structured startup log:
+  - Reports `DeepSeek Analysis: ENABLED | DISABLED (falling back to heuristic)`
+  - Reports `Admin Key: SET | DEFAULT (change-me-in-production)`
+  - Reports `OCR: AVAILABLE | NOT AVAILABLE`
+  - Reports `Uploads Dir` path
+- Replaced deprecated `@app.on_event("startup")` with modern `lifespan` pattern.
+
+#### 2. Response compression (small perf win)
+- Added `GZipMiddleware` for responses ≥ 1000 bytes (covers JSON doc payloads, translation results).
+- Reduces bandwidth on Render for larger documents — especially helpful for `list_documents` responses.
+
+#### 3. Deployment checklist in README
+- Added `☑️ Deployment Checklist` section with 6 items:
+  1. Set DEEPSEEK_API_KEY
+  2. Set DEMO_ADMIN_KEY (secure random)
+  3. Verify /health
+  4. Verify /documents is protected
+  5. Verify /documents/{id} is public by UUID
+  6. Check startup logs
+
+#### 4. Security audit (no changes needed)
+- `/documents` (list-all) is protected by `X-Admin-Key` header — correct.
+- `/documents/{id}` is public by UUID — acceptable for demo.
+- No unsafe defaults in Dockerfile (no root user exposure, no secrets in image).
+- No credentials in code or logs.
+
+**Result:** 19/19 tests passing, 0 deprecation warnings.
+
 **Commit:** `<pending>` 

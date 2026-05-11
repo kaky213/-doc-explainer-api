@@ -25,6 +25,8 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, H
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from starlette.middleware.gzip import GZipMiddleware
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime, timedelta
@@ -694,13 +696,31 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
     return debug_ocr_flow(best_text, detected_language, best)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Log configuration status on startup for operational awareness."""
+    deepseek_status = "ENABLED" if os.getenv("DEEPSEEK_API_KEY") else "DISABLED (falling back to heuristic analysis)"
+    admin_key_config = os.getenv("DEMO_ADMIN_KEY", "")
+    admin_key_status = "SET" if admin_key_config and admin_key_config != "change-me-in-production" else "DEFAULT (change-me-in-production)"
+    ocr_status = "AVAILABLE" if OCR_AVAILABLE else "NOT AVAILABLE"
+    logger.info("=== Startup Configuration ===")
+    logger.info(f"DeepSeek Analysis: {deepseek_status}")
+    logger.info(f"Admin Key: {admin_key_status}")
+    logger.info(f"OCR: {ocr_status}")
+    logger.info(f"Uploads Dir: {UPLOADS_DIR}")
+    logger.info("============================")
+    yield
+
+
 app = FastAPI(
     title="Document Explainer API",
     description="Backend API for document photo analysis, translation, and plain-language explanation",
     version="1.0.0",
     docs_url=None,
-    redoc_url=None
+    redoc_url=None,
+    lifespan=lifespan
 )
+
 
 # Demo access key — protects internal endpoints from public use
 # Set DEMO_ADMIN_KEY in .env or default to a non-guessable string
@@ -715,6 +735,9 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
+
+# Compress all responses (including JSON with extracted text/translations)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(NoCacheMiddleware)
 
