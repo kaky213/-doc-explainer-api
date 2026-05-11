@@ -6,7 +6,7 @@ class DocTranslateApp {
     this.pollTimer = null;
     this.pollStart = null;
     this.pollElapsedTimer = null;
-    this.POLL_TIMEOUT_MS = 90000;  // 90 sec max wait
+    this.POLL_TIMEOUT_MS = 63000;  // 60s processing + 3s buffer (matches backend MAX_DOC_PROCESSING_TIME)
     this.autoTranslateTriggered = false;
 
     this.initEls();
@@ -166,14 +166,17 @@ class DocTranslateApp {
           ? `${mins}m ${secs}s`
           : `${secs}s`;
       }
-      // Show subtle warning after 45s
+      // Show warnings at progressive thresholds
       const badge = document.querySelector('.poll-time-badge');
       if (badge) {
         if (elapsed > 45) {
           badge.classList.add('poll-warn');
           this.progressText.textContent = 'Still reading text — large images may take longer…';
+        } else if (elapsed > 25) {
+          badge.classList.add('poll-warn-mild');
+          this.progressText.textContent = 'This is taking a bit longer than usual…';
         } else {
-          badge.classList.remove('poll-warn');
+          badge.classList.remove('poll-warn', 'poll-warn-mild');
         }
       }
     }, 1000);
@@ -195,10 +198,30 @@ class DocTranslateApp {
 
   startPoll() {
     clearInterval(this.pollTimer);
-    this.pollTimer = setInterval(() => this.poll(), 2000);
+    this.pollAttempts = 0;
+    this.pollInterval = 2000;
+    // Poll immediately, then schedule with adaptive backoff
+    setTimeout(() => this.poll(), 100);
+    this.scheduleNextPoll();
   }
 
-  stopPoll() { clearInterval(this.pollTimer); this.pollTimer = null; this.stopElapsedTimer(); }
+  scheduleNextPoll() {
+    this.pollAttempts++;
+    // Adaptive backoff: 2s → 3s → 5s (then hold at 5s)
+    if (this.pollAttempts > 12) this.pollInterval = 5000;
+    else if (this.pollAttempts > 5) this.pollInterval = 3000;
+    else this.pollInterval = 2000;
+    this.pollTimer = setTimeout(() => {
+      this.poll();
+      this.scheduleNextPoll();
+    }, this.pollInterval);
+  }
+
+  stopPoll() {
+    clearTimeout(this.pollTimer);
+    this.pollTimer = null;
+    this.stopElapsedTimer();
+  }
 
   async poll() {
     if (!this.currentDocumentId) return;

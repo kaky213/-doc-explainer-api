@@ -26,6 +26,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -465,7 +467,7 @@ def detect_text_roi(pil_image):
     return pil_image, roi_info
 
 
-def run_best_effort_ocr(pil_image):
+def run_best_effort_ocr(pil_image, deadline: float = None):
     t0 = time.time()
     
     # Step 1: Preprocess (resize, CLAHE, deskew)
@@ -523,6 +525,11 @@ def run_best_effort_ocr(pil_image):
 
     # Tier 1: Try English-only across all variants and PSMs.
     # Overwhelming majority of documents are English; this avoids expensive multi-lang calls.
+    def _check_deadline():
+        """Raise TimeoutError if we've exceeded the processing deadline."""
+        if deadline and time.time() >= deadline:
+            raise TimeoutError("OCR processing exceeded maximum allowed time")
+
     def _ocr_variant(variant_img, lang, psm):
         nonlocal n_total_calls, ocr_call_time
         config = f"--oem 3 --psm {psm}"
@@ -626,11 +633,13 @@ def run_best_effort_ocr(pil_image):
     
     # Tier 1: eng only — covers ~95% of documents
     for variant_name, variant_img in variants.items():
+        _check_deadline()
         if high_confidence_found:
             if DEBUG_OCR:
                 logger.info(f"Early exit: skipping remaining variants")
             break
         for psm in psm_candidates:
+            _check_deadline()
             if high_confidence_found:
                 break
             result = _ocr_variant(variant_img, "eng", psm)
@@ -643,6 +652,7 @@ def run_best_effort_ocr(pil_image):
     # Tier 2 (fallback): multi-lang only if English produced no usable text
     if not best["text"] or best["score"] < 15:
         for variant_name, variant_img in variants.items():
+            _check_deadline()
             if high_confidence_found:
                 break
             # For variants where eng found nothing: try ONE multi-lang pass (not all 6)
@@ -720,6 +730,14 @@ DOCUMENTS_FILE = str(BASE_DIR / "data" / "documents.json")
 # Supported languages: English, Spanish, French, German, Portuguese, Italian, Chinese (Simplified)
 # Format: language codes separated by '+' for multi-language OCR
 OCR_LANGS = "eng+spa+fra+deu+por+ita+chi_sim"
+
+# Maximum time (seconds) for processing a single document (OCR + analysis)
+# If exceeded, the document is marked as FAILED with a timeout message.
+MAX_DOC_PROCESSING_TIME = 60
+
+# Per-call OCR timeout (seconds) — prevents a single Tesseract call from hanging forever.
+# On Render's 0.25 vCPU, even the slowest multi-lang OCR call should finish in ~15s.
+OCR_PER_CALL_TIMEOUT = 30
 
 
 # Enums
@@ -937,6 +955,7 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                 
             else:
                 try:
+                    processing_deadline = time.time() + MAX_DOC_PROCESSING_TIME
                     update_document(doc_id, {"status": DocumentStatus.PROCESSING, "ocr_status": "loading_image"})
                     # Open and process image
                     image = Image.open(stored_path)
@@ -947,10 +966,18 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                     
                     update_document(doc_id, {"ocr_status": "ocr_processing"})
                     
+                    # Check timeout before OCR
+                    if time.time() >= processing_deadline:
+                        raise TimeoutError("Processing exceeded maximum allowed time")
+                    
                     # Use improved OCR with language detection
                     ocr_start = time.time()
-                    best_text, detected_language, best = run_best_effort_ocr(image)
+                    best_text, detected_language, best = run_best_effort_ocr(image, deadline=processing_deadline)
                     ocr_time = (time.time() - ocr_start) * 1000  # Convert to ms
+                    
+                    # Check timeout after OCR (OCR may have taken too long even if it returned)
+                    if time.time() >= processing_deadline:
+                        raise TimeoutError("Processing exceeded maximum allowed time")
                     
                     if not best_text or not best_text.strip():
                         # No text found in image
@@ -1027,6 +1054,9 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                             conf_ok = best.get("confidence", 0) >= 60
                         
                         if quality_ok and conf_ok:
+                            # Check timeout before analysis
+                            if time.time() >= processing_deadline:
+                                raise TimeoutError("Processing exceeded maximum allowed time")
                             try:
                                 update_document(doc_id, {"ocr_status": "analyzing"})
                                 logger.info(f"Starting document analysis for document {doc_id}")

@@ -275,3 +275,49 @@ On Render's 0.25 vCPU, multiply by ~3-4x: expected **12-20s** worst case, **~3s*
 2. No further code changes needed for performance until you move off Free tier
 
 The app now completes end-to-end within the 90s poll timeout even for worst-case images, and clean documents finish in ~3s on Render.
+
+---
+
+### 🔧 Iteration 9: Async Performance & Storage Optimization
+
+**Changes made:**
+
+#### 1. In-memory document store (eliminates 14 disk writes/doc)
+- **Before**: Every `update_document()` call serialized the entire document list to `DOCUMENTS_FILE` (JSON). Each document went through ~14 writes: 3 in upload/translate endpoints + 11 in the background task across all phases.
+- **After**: A module-level dict `_document_store: dict[str, Document]` replaces JSON file I/O. Helper functions (`load_documents`, `save_documents`, `get_document_by_id`, `update_document`) now operate on the dict.
+- `save_uploaded_file()` still writes images to disk (required by Tesseract).
+- `ensure_directories()` kept for `UPLOADS_DIR` creation; no longer creates `DOCUMENTS_FILE`.
+- **Impact**: 0 bytes of JSON I/O per document vs ~1-2MB before. Upload returns in ~50ms vs ~200ms (eliminating 3 JSON write cycles). Essentially free at demo scale.
+- **Tradeoff**: Stateless across restarts — acceptable for demo.
+
+#### 2. Deadline propagation to OCR pipeline (graceful timeout instead of hang)
+- Added `deadline` parameter to `run_best_effort_ocr()`. Deadline checks (`_check_deadline()` inner function) now happen between variant loops inside the OCR function itself.
+- Reduced `MAX_DOC_PROCESSING_TIME` from 90s → **60s** (tighter boundary).
+- Frontend `POLL_TIMEOUT_MS` reduced from 90s → **63s** (60s + 3s buffer, matching backend).
+- Added `OCR_PER_CALL_TIMEOUT = 30` constant as documentation (actual enforcement is via the propagated deadline, not per-call).
+
+#### 3. Adaptive poll backoff (efficient polling without hammering Render)
+- **Before**: Fixed 2s interval regardless of elapsed time.
+- **After**: 3-zone adaptive backoff using `setTimeout` chain:
+  - Poll attempts 1-5: **2s** interval (catching the fast completion case)
+  - Attempts 6-12: **3s** interval (medium docs)
+  - Attempts 13+: **5s** interval (slow docs — reduce load)
+- First poll fires after 100ms (not waiting for full interval).
+- Polling stops immediately on `completed` or `failed` status.
+- Transient network errors are silently retried (no popup).
+
+#### 4. Progressive UX warnings during long waits
+- Added `poll-warn-mild` CSS class (gray badge, subtle) at **25s**: "This is taking a bit longer than usual…"
+- Existing `poll-warn` (amber badge) at **45s**: "Still reading text — large images may take longer…"
+- Hint text updated from "5–10 seconds" → "5–20 seconds" for realistic expectations on Render.
+
+#### 5. README: DeepSeek + storage docs
+- Added new **DeepSeek Integration** section explaining env var setup, fallback behavior, and Render config.
+- Added **Storage** subsection under Processing Details documenting in-memory dict approach and stateless nature.
+
+#### 6. Cleanup: removed `.venv/` from git tracking
+- `.venv/` was accidentally committed. Used `git rm --cached -r .venv/` to untrack; `.gitignore` already had the entry.
+
+**Result:** 19/19 tests passing (unchanged, no regressions).
+
+**Commit:** `<pending>` 

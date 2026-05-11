@@ -500,4 +500,6 @@ img{max-width:100%;height:auto;display:block}
 .poll-time-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:#69db7c;animation:pulse 1.5s infinite}
 .poll-warn{background:#fff3bf;color:#e67700}
 .poll-warn::before{background:#fab005}
+.poll-warn-mild{background:#f8f9fa;color:#868e96}
+.poll-warn-mild::before{background:#adb5bd}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
