@@ -815,57 +815,36 @@ def ensure_directories():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
+# In-memory document store — avoids disk I/O on every status update
+# Documents are stored as Document objects keyed by document_id.
+# This is stateless across restarts (appropriate for demo/deployment).
+_document_store: dict[str, Document] = {}
+
+
 def load_documents() -> List[Document]:
-    """Load all documents from JSON file"""
-    ensure_directories()
-    
-    if not os.path.exists(DOCUMENTS_FILE):
-        return []
-    
-    try:
-        with open(DOCUMENTS_FILE, 'r') as f:
-            data = json.load(f)
-            return [Document(**doc) for doc in data]
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
+    """Return all documents from in-memory store"""
+    return list(_document_store.values())
 
 
 def save_documents(documents: List[Document]):
-    """Save documents to JSON file"""
-    ensure_directories()
-    
-    # Convert Document objects to dictionaries
-    docs_data = []
-    for doc in documents:
-        doc_dict = doc.model_dump()
-        docs_data.append(doc_dict)
-    
-    with open(DOCUMENTS_FILE, 'w') as f:
-        json.dump(docs_data, f, indent=2)
+    """Replace the in-memory store with a new document list"""
+    global _document_store
+    _document_store = {doc.id: doc for doc in documents}
 
 
 def get_document_by_id(doc_id: str) -> Optional[Document]:
-    """Get a document by ID"""
-    documents = load_documents()
-    for doc in documents:
-        if doc.id == doc_id:
-            return doc
-    return None
+    """Get a document by ID from in-memory store"""
+    return _document_store.get(doc_id)
 
 
 def update_document(doc_id: str, updates: dict):
-    """Update a document with new values"""
-    documents = load_documents()
-    
-    for i, doc in enumerate(documents):
-        if doc.id == doc_id:
-            # Update the document with new values
-            for key, value in updates.items():
-                setattr(documents[i], key, value)
-            save_documents(documents)
-            return True
-    
-    return False
+    """Update a document with new values (in-memory, no disk I/O)"""
+    doc = _document_store.get(doc_id)
+    if doc is None:
+        return False
+    for key, value in updates.items():
+        setattr(doc, key, value)
+    return True
 
 
 def get_source_type_from_filename(filename: str) -> DocumentSourceType:
@@ -1300,8 +1279,6 @@ async def upload_document(
     stored_path = save_uploaded_file(file)
     
     # Create document record
-    documents = load_documents()
-    
     doc_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     source_type = get_source_type_from_filename(file.filename)
@@ -1317,9 +1294,8 @@ async def upload_document(
         created_at=now
     )
     
-    # Save to documents list
-    documents.append(document)
-    save_documents(documents)
+    # Store in-memory (no disk I/O for metadata)
+    _document_store[doc_id] = document
     
     # Trigger background processing
     upload_time = (time.time() - upload_t0) * 1000

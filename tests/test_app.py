@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import app, DOCUMENTS_FILE, DocumentStatus
+from app import app, DOCUMENTS_FILE, DocumentStatus, _document_store
 
 
 @pytest.fixture
@@ -24,15 +24,8 @@ def client():
 @pytest.fixture(autouse=True)
 def cleanup_test_data():
     """Clean up test data before and after each test."""
-    # Backup original documents file if it exists
-    original_exists = os.path.exists(DOCUMENTS_FILE)
-    if original_exists:
-        with open(DOCUMENTS_FILE, 'r') as f:
-            original_data = f.read()
-    
-    # Clear test data before test
-    if os.path.exists(DOCUMENTS_FILE):
-        os.remove(DOCUMENTS_FILE)
+    # Clear the in-memory document store
+    _document_store.clear()
     
     # Clear uploads directory
     uploads_dir = os.path.join("data", "uploads")
@@ -44,12 +37,8 @@ def cleanup_test_data():
     
     yield  # Run test
     
-    # Restore original data after test
-    if original_exists:
-        with open(DOCUMENTS_FILE, 'w') as f:
-            f.write(original_data)
-    elif os.path.exists(DOCUMENTS_FILE):
-        os.remove(DOCUMENTS_FILE)
+    # Clear in-memory store after test
+    _document_store.clear()
 
 
 def wait_for_processing(client, doc_id, max_wait=5.0, poll_interval=0.1):
@@ -101,8 +90,13 @@ def test_upload_document(client):
     assert result["explanation"] is None
     assert "disclaimer" in result
     
-    # Verify document was saved to file
-    assert os.path.exists(DOCUMENTS_FILE)
+    # Verify document is in in-memory store (no file-based storage)
+    from app import _document_store
+    assert result["id"] in _document_store
+    # Status may already be 'processing' or 'completed' if background task ran
+    assert _document_store[result["id"]].status in (
+        DocumentStatus.UPLOADED, DocumentStatus.PROCESSING, DocumentStatus.COMPLETED
+    )
 
 
 def test_upload_txt_file_processing(client):
