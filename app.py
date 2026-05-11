@@ -162,7 +162,7 @@ def preprocess_for_ocr(pil_image):
         gray = np.ones((100, 100), dtype=np.uint8) * 255
 
     h, w = gray.shape[:2]
-    max_dim = 2000
+    max_dim = 1200  # 1200px max side — plenty for OCR, 2-4x faster than 2000
     info = {"original_dims": (w, h)}
 
     # Step 1: Downscale large images to max 2000px on longest side
@@ -466,11 +466,18 @@ def detect_text_roi(pil_image):
 
 
 def run_best_effort_ocr(pil_image):
+    t0 = time.time()
+    
     # Step 1: Preprocess (resize, CLAHE, deskew)
     preprocessed, pre_info = preprocess_for_ocr(pil_image)
+    t1 = time.time()
     
     # Step 2: Detect ROI for better OCR accuracy
     roi_pil, roi_info = detect_text_roi(preprocessed)
+    t2 = time.time()
+    
+    pre_time = (t1 - t0) * 1000
+    roi_time = (t2 - t1) * 1000
     
     # Log preprocessing and ROI decisions
     if DEBUG_OCR:
@@ -484,6 +491,10 @@ def run_best_effort_ocr(pil_image):
     
     # Step 3: Build OCR variants from ROI
     variants = build_ocr_variants(roi_pil)
+    
+    n_variants = len(variants)
+    n_total_calls = 0
+    ocr_call_time = 0.0
 
     # Diverse language candidates for real-world photos (signs, labels, notices)
     # Use multiple language packs in order of global sign prevalence
@@ -510,112 +521,138 @@ def run_best_effort_ocr(pil_image):
     # Track if we found a high-confidence result for early exit
     high_confidence_found = False
 
+    # Tier 1: Try English-only across all variants and PSMs.
+    # Overwhelming majority of documents are English; this avoids expensive multi-lang calls.
+    def _ocr_variant(variant_img, lang, psm):
+        nonlocal n_total_calls, ocr_call_time
+        config = f"--oem 3 --psm {psm}"
+        n_total_calls += 1
+        ocr_t0 = time.time()
+        try:
+            data = pytesseract.image_to_data(
+                variant_img,
+                lang=lang,
+                config=config,
+                output_type=pytesseract.Output.DICT
+            )
+        except Exception:
+            return None
+        ocr_call_time += (time.time() - ocr_t0) * 1000
+        return _score_ocr_data(data, lang)
+
+    def _score_ocr_data(data, lang):
+        """Extract text and compute score from pytesseract DICT output."""
+        n = len(data.get("text", []))
+        lines = {}
+        for i in range(n):
+            raw_txt = data["text"][i] or ""
+            txt = raw_txt.strip()
+            if not txt:
+                continue
+            try:
+                ln = int(data.get("line_num", [0])[i])
+            except Exception:
+                ln = 0
+            try:
+                left = int(data.get("left", [0])[i])
+            except Exception:
+                left = 0
+            try:
+                c = float(data.get("conf", ["-1"])[i])
+            except Exception:
+                c = -1.0
+            if ln not in lines:
+                lines[ln] = []
+            lines[ln].append((left, txt, c))
+
+        line_texts = []
+        line_confs = []
+        for ln in sorted(lines.keys()):
+            words = sorted(lines[ln], key=lambda x: x[0])
+            texts = [w[1] for w in words]
+            confs = [w[2] for w in words if w[2] >= 0]
+            if not texts:
+                continue
+            avg_conf = sum(confs) / len(confs) if confs else -1.0
+            line_text = " ".join(texts).strip()
+            alpha_words = [t for t in texts if sum(ch.isalpha() for ch in t) >= 2]
+            alpha_chars = sum(ch.isalpha() for ch in line_text)
+            keep_line = False
+            if avg_conf < 0:
+                keep_line = alpha_chars >= 6 and len(alpha_words) >= 2
+            elif avg_conf >= 55:
+                keep_line = alpha_chars >= 4
+            elif avg_conf >= 40:
+                keep_line = alpha_chars >= 6 and len(alpha_words) >= 2
+            if keep_line:
+                line_texts.append(line_text)
+                if avg_conf >= 0:
+                    line_confs.append(avg_conf)
+        text = "\n".join(line_texts).strip()
+        if line_confs:
+            conf = sum(line_confs) / len(line_confs)
+        else:
+            conf = average_confidence(data)
+        score = score_ocr_text(text) + conf + language_word_bonus(text, lang)
+        return {"text": text, "conf": conf, "score": score}
+
+    def _update_best(result, variant_name, lang, psm):
+        nonlocal best, high_confidence_found
+        if result["score"] > best["score"]:
+            best.update({
+                "text": result["text"],
+                "score": result["score"],
+                "confidence": result["conf"],
+                "lang": lang,
+                "variant": variant_name,
+                "psm": psm,
+                "roi_method": roi_info.get("method"),
+                "roi_confidence": roi_info.get("confidence"),
+                "roi_size": roi_info.get("roi_size"),
+                "original_size": roi_info.get("original_size"),
+                "preprocessing": pre_info,
+            })
+            if result["conf"] >= 85 and result["score"] >= 80:
+                high_confidence_found = True
+                if DEBUG_OCR:
+                    logger.info(f"Early exit: conf={result['conf']:.0f}% score={result['score']:.0f}")
+            elif result["conf"] >= 90:
+                high_confidence_found = True
+                if DEBUG_OCR:
+                    logger.info(f"Early exit: very high conf={result['conf']:.0f}%")
+
+    # Track which variants produced any text in Tier 1
+    _variant_had_text = set()
+    
+    # Tier 1: eng only — covers ~95% of documents
     for variant_name, variant_img in variants.items():
         if high_confidence_found:
             if DEBUG_OCR:
                 logger.info(f"Early exit: skipping remaining variants")
             break
-            
-        for lang in lang_candidates:
+        for psm in psm_candidates:
             if high_confidence_found:
                 break
-                
-            for psm in psm_candidates:
-                if high_confidence_found:
-                    break
-                    
-                config = f"--oem 3 --psm {psm}"
-                try:
-                    data = pytesseract.image_to_data(
-                        variant_img,
-                        lang=lang,
-                        config=config,
-                        output_type=pytesseract.Output.DICT
-                    )
-
-                    n = len(data.get("text", []))
-                    lines = {}
-                    for i in range(n):
-                        raw_txt = data["text"][i] or ""
-                        txt = raw_txt.strip()
-                        if not txt:
-                            continue
-                        try:
-                            ln = int(data.get("line_num", [0])[i])
-                        except Exception:
-                            ln = 0
-                        try:
-                            left = int(data.get("left", [0])[i])
-                        except Exception:
-                            left = 0
-                        try:
-                            c = float(data.get("conf", ["-1"])[i])
-                        except Exception:
-                            c = -1.0
-                        if ln not in lines:
-                            lines[ln] = []
-                        lines[ln].append((left, txt, c))
-
-                    line_texts = []
-                    line_confs = []
-                    for ln in sorted(lines.keys()):
-                        words = sorted(lines[ln], key=lambda x: x[0])
-                        texts = [w[1] for w in words]
-                        confs = [w[2] for w in words if w[2] >= 0]
-                        if not texts:
-                            continue
-
-                        avg_conf = sum(confs) / len(confs) if confs else -1.0
-                        line_text = " ".join(texts).strip()
-
-                        alpha_words = [t for t in texts if sum(ch.isalpha() for ch in t) >= 2]
-                        alpha_chars = sum(ch.isalpha() for ch in line_text)
-
-                        keep_line = False
-                        if avg_conf < 0:
-                            keep_line = alpha_chars >= 6 and len(alpha_words) >= 2
-                        elif avg_conf >= 55:
-                            keep_line = alpha_chars >= 4
-                        elif avg_conf >= 40:
-                            keep_line = alpha_chars >= 6 and len(alpha_words) >= 2
-
-                        if keep_line:
-                            line_texts.append(line_text)
-                            if avg_conf >= 0:
-                                line_confs.append(avg_conf)
-
-                    text = "\n".join(line_texts).strip()
-                    if line_confs:
-                        conf = sum(line_confs) / len(line_confs)
-                    else:
-                        conf = average_confidence(data)
-
-                    score = score_ocr_text(text) + conf + language_word_bonus(text, lang)
-                    if score > best["score"]:
-                        best = {
-                            "text": text,
-                            "score": score,
-                            "confidence": conf,
-                            "lang": lang,
-                            "variant": variant_name,
-                            "psm": psm,
-                            "roi_method": roi_info.get("method"),
-                            "roi_confidence": roi_info.get("confidence"),
-                            "roi_size": roi_info.get("roi_size"),
-                            "original_size": roi_info.get("original_size"),
-                            "preprocessing": pre_info,
-                        }
-
-                        if conf >= 85 and score >= 80:
-                            high_confidence_found = True
-                            if DEBUG_OCR:
-                                logger.info(f"Early exit: confidence={conf:.1f}%, score={score:.1f}")
-                        elif conf >= 90:
-                            high_confidence_found = True
-                            if DEBUG_OCR:
-                                logger.info(f"Early exit: very high confidence={conf:.1f}%")
-                except Exception:
-                    pass
+            result = _ocr_variant(variant_img, "eng", psm)
+            if result is None:
+                continue
+            if result["text"]:
+                _variant_had_text.add(variant_name)
+            _update_best(result, variant_name, "eng", psm)
+    
+    # Tier 2 (fallback): multi-lang only if English produced no usable text
+    if not best["text"] or best["score"] < 15:
+        for variant_name, variant_img in variants.items():
+            if high_confidence_found:
+                break
+            # For variants where eng found nothing: try ONE multi-lang pass (not all 6)
+            # For variants where eng found text: skip — eng already explored this variant
+            if variant_name in _variant_had_text:
+                continue
+            # Just try the best multi-lang candidate with psm=6, skip if still empty
+            result = _ocr_variant(variant_img, "eng+spa", 6)
+            if result is not None:
+                _update_best(result, variant_name, "eng+spa", 6)
 
     detected_language = "unknown"
     if best["lang"] != "unknown":
@@ -631,6 +668,18 @@ def run_best_effort_ocr(pil_image):
     
     quality = ocr_quality_from_score(best.get("score", 0.0), best.get("confidence", 0.0), best_text)
     best["quality"] = quality
+    
+    # Add timing metadata to result for logging
+    t3 = time.time()
+    total_ocr_pipeline_ms = (t3 - t0) * 1000
+    logger.info(
+        f"OCR profile: pre={pre_time:.0f}ms roi={roi_time:.0f}ms "
+        f"calls={n_total_calls} ({ocr_call_time:.0f}ms) "
+        f"total={total_ocr_pipeline_ms:.0f}ms "
+        f"variants={n_variants} "
+        f"lang={best.get('lang','?')} psm={best.get('psm','?')} "
+        f"conf={best.get('confidence',0):.0f}% score={best.get('score',0):.0f}"
+    )
     
     return debug_ocr_flow(best_text, detected_language, best)
 
@@ -1209,8 +1258,7 @@ async def upload_document(
     request: Request = None
 ):
     """Upload a document for processing"""
-    
-    # Validate filename
+    upload_t0 = time.time()
     if not file.filename:
         logger.warning("Upload rejected: no filename provided")
         raise HTTPException(status_code=400, detail="Filename is required")
@@ -1255,7 +1303,6 @@ async def upload_document(
     now = datetime.now().isoformat()
     source_type = get_source_type_from_filename(file.filename)
     
-    logger.info(f"Upload accepted: id={doc_id[:8]}... name={file.filename} type={source_type} size={file_size}")
     
     document = Document(
         id=doc_id,
@@ -1272,6 +1319,9 @@ async def upload_document(
     save_documents(documents)
     
     # Trigger background processing
+    upload_time = (time.time() - upload_t0) * 1000
+    logger.info(f"Upload accepted: id={doc_id[:8]}... name={file.filename} type={source_type} size={file_size} handled_in={upload_time:.0f}ms")
+    
     background_tasks.add_task(
         process_document_background,
         doc_id,

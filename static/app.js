@@ -258,7 +258,7 @@ class DocTranslateApp {
       const td = await r.json();
       this.setStep(3);
       this.progressText.textContent = 'Building explanation…';
-      setTimeout(() => this.showResults(td), 700);
+      setTimeout(() => this.showResults(td), 300);
     } catch(e) {
       console.error(e);
       this.msg(`Translation failed: ${e.message}`, 'err');

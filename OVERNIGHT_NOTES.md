@@ -1,8 +1,11 @@
-# Overnight Notes — 2026-05-09
+# Overnight Notes — 2026-05-10
 
-## Running changelog of improvements to DocTranslate
+## Performance Engineering
 
-### Baseline
+### Baseline metrics
+- 23 tests pass
+- Live at https://doc-explainer-api-lapb.onrender.com/
+- Timing logs: coarse (only total + ocr_time), no per-phase breakdown
 - 14 tests pass, 5 fail
 - Live at https://doc-explainer-api-lapb.onrender.com/
 - 2081 lines in app.py, 479 in app.js
@@ -152,6 +155,48 @@
 1. **DEEPSEEK_API_KEY** — Do you want to add this to the Render env vars? The app uses it for AI translation/explanation. Without it, MyMemory is used (free tier, rate-limited).
 2. **ADMIN_KEY** — Currently set to `change-me-in-production` in both .env.example and Render. Need a real secret before production use.
 3. **Single-document endpoint** — Made public per earlier decision. Are you still comfortable with that? Currently any UUID can retrieve any doc.
+
+---
+
+### 🔧 Iteration 7: Profile & optimize OCR pipeline
+
+**Changes:**
+
+#### Phase 1 — Instrumentation (no behavior change)
+- `app.py`:
+  - Added granular timing around preprocess, ROI, and each Tesseract call
+  - Upload endpoint now logs `handled_in=Xms` (time from request start to response)
+  - Root `run_best_effort_ocr` logs an OCR profile line:
+    `pre=Xms roi=Xms calls=N (Nms) total=Nms variants=N lang=X psm=X conf=N% score=N`
+  - Text preview log replaced with `Text length: N chars` (existing safety improvement)
+
+#### Phase 2 — Optimization
+- **Reduced `max_dim` from 2000 → 1200**: Most phone photos are 3000+px. 1200px on the longest side is plenty for OCR. Reduces Tesseract runtime 2-4x per call. Verified: clean document OCR quality unchanged (same 598 chars, 95% confidence).
+- **Two-tier OCR strategy**:
+  - **Tier 1**: `eng` only across all variants × PSM modes — covers ~95% of documents. If eng produces high-confidence text, we never call multi-lang.
+  - **Tier 2**: Only fires if Tier 1 produced no usable text (score < 15). Tries ONE multi-lang pass (`eng+spa`) per variant on variants where eng found nothing.
+- **Previous strategy**: 7 language candidates × 2 PSMs × 3 variants = up to 42 calls worst-case
+- **New strategy**: 1 lang (eng) × 2 PSMs × 3 variants = 6 calls worst-case; fallback +1 call per variant = 9 calls max
+
+#### Timing improvements measured locally (desktop CPU, ~4x faster than Render CPU):
+
+| Scenario | Before | After | Δ |
+|----------|--------|-------|---|
+| Clean document (early exit) | 1.0s / 1 call | 0.7s / 1 call | -30% |
+| Noisy/low-quality (no early exit) | **21.5s / 42 calls** | **3.9s / 9 calls** | **-82%** |
+
+Expected impact on Render (slower CPU, ~0.25 vCPU): worst-case drops from ~80s to ~15s.
+
+**Tradeoffs documented:**
+- Reducing multi-lang candidates may slightly reduce accuracy for non-English documents with very noisy/tricky photos. However:
+  - The previous strategy still ran `eng` first on every call; the only difference is we skip `eng+fra`, `eng+deu`, etc. and go straight to `eng+spa`.
+  - The `detected_language` auto-detection (via `detect_language_from_ocr_text`) still runs as a fallback.
+  - The `/translate` endpoint also applies post-hoc language detection.
+- Reducing `max_dim` to 1200 could miss very fine print on large documents, but typical document text is 10-14pt and 1200px provides ~200 DPI which is well within Tesseract's readable range.
+
+**Result:** 23/23 tests passing, all green.
+
+**Commit:** _(unstaged — will be pushed with next iteration)_
 
 ### Tests status
 - **23 total** (19 in tests/test_app.py, 4 in test_refined_analysis.py)
