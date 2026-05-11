@@ -230,7 +230,17 @@ class DocTranslateApp {
         this.msg('Unable to read text from this image. Try a clearer photo.', 'err');
         this.reset();
       } else {
-        this.progressText.textContent = 'Reading text from image…';
+        // Show phase-specific progress using ocr_status field
+        const phase = d.ocr_status;
+        if (phase === 'loading_image') {
+          this.progressText.textContent = 'Loading image…';
+        } else if (phase === 'ocr_processing') {
+          this.progressText.textContent = 'Reading text from image…';
+        } else if (phase === 'analyzing') {
+          this.progressText.textContent = 'Analyzing document…';
+        } else {
+          this.progressText.textContent = 'Processing…';
+        }
       }
     } catch(e) {
       console.warn('Poll network error (will retry):', e.message);

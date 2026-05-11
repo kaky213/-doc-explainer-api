@@ -958,12 +958,15 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                 
             else:
                 try:
+                    update_document(doc_id, {"status": DocumentStatus.PROCESSING, "ocr_status": "loading_image"})
                     # Open and process image
                     image = Image.open(stored_path)
                     
                     # First check if we can read the image at all
                     image.verify()  # Verify image integrity
                     image = Image.open(stored_path)  # Reopen after verify
+                    
+                    update_document(doc_id, {"ocr_status": "ocr_processing"})
                     
                     # Use improved OCR with language detection
                     ocr_start = time.time()
@@ -1046,11 +1049,11 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                         
                         if quality_ok and conf_ok:
                             try:
+                                update_document(doc_id, {"ocr_status": "analyzing"})
                                 logger.info(f"Starting document analysis for document {doc_id}")
                                 analysis_start = time.time()
-                                # Run async function in sync context
-                                import asyncio
-                                analysis_result = asyncio.run(analyze_document_content(best_text))
+                                # Use sync version — avoids creating a new event loop via asyncio.run()
+                                analysis_result = analyze_document_content_sync(best_text)
                                 analysis_time = (time.time() - analysis_start) * 1000
                                 logger.info(f"Document analysis completed in {analysis_time:.0f} ms")
                                 
@@ -1956,6 +1959,20 @@ Follow all rules strictly. Return ONLY the JSON object."""
                             "hazard_level": None,
                             "location_context": None
         }
+
+
+def analyze_document_content_sync(extracted_text: str) -> dict:
+    """
+    Sync wrapper around analyze_document_content for use in background tasks.
+    Uses a fresh event loop so it doesn't interfere with FastAPI's event loop.
+    """
+    import asyncio
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(analyze_document_content(extracted_text))
+    finally:
+        loop.close()
 
 
 @app.post("/documents/{document_id}/translate", response_model=DocumentResponse)
