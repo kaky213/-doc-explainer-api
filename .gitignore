@@ -1,7 +1,35 @@
+# Runtime artifacts
+app.log
+app.pid
 *.bak
+
+# Python
 __pycache__/
 *.pyc
 .env
-.data/
 .venv/
 venv/
+
+# Binary files
+*.deb
+*.tar.gz
+
+# Local data (mounted volume for Docker)
+.data/
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+docs/data/
