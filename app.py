@@ -61,25 +61,43 @@ def debug_ocr_flow(best_text: str, detected_language: str, best: dict) -> tuple:
 
 
 def ocr_quality_from_score(score: float, conf: float, text: str = "") -> str:
-    # Simple heuristic; tweak as you collect real data
+    """
+    Determine OCR quality label based on combined score, confidence, and text content.
     
-    # Check for white-on-dark / chalkboard-style layout (high char count + alphabetic but non-linear layout)
-    # This triggers for dense text with lots of content even if OCR scores it low
-    if text and len(text.strip()) >= 50:
-        alpha_ratio = sum(1 for c in text if c.isalpha()) / max(len(text.strip()), 1)
-        if alpha_ratio >= 0.5 and len(text.strip()) >= 100:
-            # Lots of text with reasonable letter ratio — likely a board/sign/menu with partial errors
-            # Don't call it "low" even if confidence is mediocre
-            if conf >= 60:
-                return "medium"
+    Returns one of: "high", "medium", "low", "none"
+    """
+    if not text or not text.strip():
+        return "none"
     
-    if conf >= 85 and score >= 80:
+    cleaned = text.strip()
+    word_count = len(cleaned.split())
+    alpha_ratio = sum(1 for c in cleaned if c.isalpha()) / max(len(cleaned), 1)
+    
+    # Excellent results — clear scan with good confidence
+    if conf >= 80 and score >= 70:
         return "high"
-    if conf >= 60 and score >= 50:
+    
+    # Good results — usable text with reasonable confidence
+    if conf >= 60 and score >= 45:
         return "medium"
-    if text and len(text.strip()) >= 40 and conf >= 55:
-        # Borderline: lots of text, near-threshold confidence — be permissive for menus/boards
-        return "low"  # Still technically low, but has enough text for partial results
+    
+    # Long text with reasonable letter ratio even with mediocre confidence
+    # This handles boards/signs/menus where many chars are correct but confidence is noisy
+    if len(cleaned) >= 60 and alpha_ratio >= 0.5 and word_count >= 8:
+        if conf >= 50:
+            return "medium"
+        if conf >= 35:
+            return "low"  # Permissive: lots of content, partial errors expected
+    
+    # Short text but clear (dates, names, prices) — be permissive
+    if len(cleaned) >= 10 and alpha_ratio >= 0.6 and conf >= 50:
+        return "low"  # Short but meaningful
+    
+    # Long text, very noisy confidence but lots of content — borderline
+    if len(cleaned) >= 100 and alpha_ratio >= 0.4:
+        return "low"  # Has substance despite low confidence
+    
+    # Everything else — too little or too noisy
     return "low"
 
 
@@ -127,7 +145,25 @@ def score_ocr_text(text: str) -> float:
     length_score = min(len(cleaned), 500) / 10.0
     ratio_score = (useful / max(len(cleaned), 1)) * 100.0
     line_score = min(len([ln for ln in cleaned.splitlines() if ln.strip()]), 12) * 2.0
-    return length_score + ratio_score + line_score + spaces * 0.1
+    
+    # Garbage penalty: heavily penalize text with unusual character distributions
+    # Real text has mostly alphabetic chars; garbage OCR produces symbols, scattered punctuation
+    garbage_penalty = 0.0
+    if len(cleaned) > 10:
+        # Count printable-but-non-alphanumeric chars (symbols, punctuation clusters)
+        non_alpha = sum(1 for c in cleaned if not c.isalpha() and not c.isspace() and not c.isdigit())
+        symbol_ratio = non_alpha / max(len(cleaned), 1)
+        if symbol_ratio > 0.3:
+            garbage_penalty = symbol_ratio * 50  # heavy penalty for high symbol density
+        elif symbol_ratio > 0.15:
+            garbage_penalty = symbol_ratio * 20  # moderate penalty
+    
+    # Very short text with good alpha ratio is still useful (dates, names, prices)
+    if len(cleaned) >= 10 and letters >= 8 and garbage_penalty == 0.0:
+        # Short but meaningful — small bonus
+        garbage_penalty = -5.0
+    
+    return length_score + ratio_score + line_score + spaces * 0.1 - garbage_penalty
 
 
 def average_confidence(data_dict) -> float:
@@ -207,35 +243,57 @@ def preprocess_for_ocr(pil_image):
 
 
 def build_ocr_variants(pil_image):
+    """
+    Build multiple preprocessing variants of an image for OCR.
+    Returns dict of {variant_name: pil_image_or_numpy_array}.
+    
+    Variants cover: original grayscale, Otsu threshold, adaptive threshold,
+    inverted (light-text-on-dark-bg), and high-contrast boost.
+    """
     img = np.array(pil_image)
     if not isinstance(img, np.ndarray) or img.ndim < 2 or img.size == 0:
         # Fallback: return original only
-        return {
-            "original": pil_image,
-            "otsu": pil_image,
-            "adaptive": pil_image,
-        }
+        return {"original": pil_image}
+    
     if img.ndim == 2:
         gray = img
     elif img.ndim == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     else:
-        return {"original": pil_image, "otsu": pil_image, "adaptive": pil_image}
+        return {"original": pil_image}
 
-    blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    variants = {}
     
-    # Use a smaller block size and gentler C for adaptive thresholding
-    # This works better for signs with colored/textured backgrounds
+    # 1. Original grayscale (always works)
+    variants["original"] = pil_image
+    
+    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    
+    # 2. Otsu threshold — good for scanned docs with even contrast
+    otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    variants["otsu"] = otsu
+    
+    # 3. Adaptive threshold — good for uneven lighting, shadows
     adaptive = cv2.adaptiveThreshold(
         blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10
     )
+    variants["adaptive"] = adaptive
+    
+    # 4. Inverted + Otsu — for light-text-on-dark-background (signs, stickers)
+    inverted = cv2.bitwise_not(blur)
+    otsu_inv = cv2.threshold(inverted, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    variants["invert"] = otsu_inv
+    
+    # 5. Denoised original — median filter for noisy/low-light photos
+    denoised = cv2.medianBlur(gray, 3)
+    variants["denoised"] = denoised
+    
+    # 6. High-contrast boost — for washed-out or low-contrast images
+    # Uses alpha=2.0 beta=-30 for strong contrast stretch
+    high_contrast = cv2.convertScaleAbs(gray, alpha=2.0, beta=-30)
+    variants["high_contrast"] = high_contrast
 
-    return {
-        "original": pil_image,
-        "otsu": otsu,
-        "adaptive": adaptive,
-    }
+    return variants
 
 
 def language_word_bonus(text: str, lang: str) -> float:
@@ -652,19 +710,25 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
             _update_best(result, variant_name, "eng", psm)
     
     # Tier 2 (fallback): multi-lang only if English produced no usable text
+    # Try progressively broader language combinations
+    fallback_langs = ["eng+spa", "eng+fra", "eng+deu", "eng+por", "eng+spa+fra", "eng+ita"]
     if not best["text"] or best["score"] < 15:
         for variant_name, variant_img in variants.items():
             _check_deadline()
             if high_confidence_found:
                 break
-            # For variants where eng found nothing: try ONE multi-lang pass (not all 6)
             # For variants where eng found text: skip — eng already explored this variant
             if variant_name in _variant_had_text:
                 continue
-            # Just try the best multi-lang candidate with psm=6, skip if still empty
-            result = _ocr_variant(variant_img, "eng+spa", 6)
-            if result is not None:
-                _update_best(result, variant_name, "eng+spa", 6)
+            for flang in fallback_langs:
+                _check_deadline()
+                if high_confidence_found:
+                    break
+                result = _ocr_variant(variant_img, flang, 6)
+                if result is not None:
+                    _update_best(result, variant_name, flang, 6)
+                    if result["score"] > 20:  # good enough — stop trying more langs
+                        break
 
     detected_language = "unknown"
     if best["lang"] != "unknown":
@@ -1341,6 +1405,35 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"Photo is too large ({file_size / 1024 / 1024:.0f}MB). Maximum is {MAX_IMAGE_BYTES / 1024 / 1024:.0f}MB.")
     if not is_image and file_size > MAX_TEXT_BYTES:
         raise HTTPException(status_code=413, detail=f"Document is too large ({file_size / 1024 / 1024:.0f}MB). Text files must be under {MAX_TEXT_BYTES / 1024 / 1024:.0f}MB.")
+    
+    # Pre-validate image dimensions before processing
+    # Read just the header to get image dimensions without full decode
+    if is_image and file_size > 0:
+        try:
+            # Check pixel dimensions early — extremely large images can crash or OOM
+            with Image.open(file.file) as img_check:
+                max_allowed_dim = 8000  # 8K pixels on any side
+                if img_check.width > max_allowed_dim or img_check.height > max_allowed_dim:
+                    file.file.seek(0)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Image dimensions ({img_check.width}x{img_check.height}) exceed the maximum of {max_allowed_dim}x{max_allowed_dim}. Please resize the image before uploading."
+                    )
+                # Check for images that are too small to save
+                if img_check.width < 20 or img_check.height < 20:
+                    file.file.seek(0)
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Image is too small ({img_check.width}x{img_check.height}). The photo must be at least 20x20 pixels."
+                    )
+        except Exception as e:
+            file.file.seek(0)
+            # If Image.open fails, the file might be corrupted or a non-image
+            logger.warning(f"Image validation failed for {file.filename}: {e}")
+            # Don't reject — let the processing pipeline handle it gracefully
+            pass
+        finally:
+            file.file.seek(0)
     
     # Save uploaded file
     stored_path = save_uploaded_file(file)
@@ -2218,7 +2311,13 @@ async def translate_document(document_id: str, request: TranslationRequest):
             deepseek_time = (time.time() - deepseek_start) * 1000
         except Exception as e:
             logger.error(f"DeepSeek translation failed: {e}")
-            translated_text = f"[{target_lang}] " + doc.extracted_text[:500]
+            # Full text fallback — never silently truncate
+            # Show source text with language prefix so user still gets something useful
+            if len(doc.extracted_text) > 5000:
+                # Truncate only if it's truly huge (unlikely for OCR text)
+                translated_text = f"[{target_lang}] (translation unavailable) " + doc.extracted_text[:5000] + "..."
+            else:
+                translated_text = f"[{target_lang}] (translation unavailable) " + doc.extracted_text
     
     # Generate explanation
     if translated_text and not translated_text.startswith(f"[{target_lang}]"):

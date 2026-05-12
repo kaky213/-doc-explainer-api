@@ -229,8 +229,8 @@ class DocTranslateApp {
     // Check timeout
     if (this.pollStart && (Date.now() - this.pollStart) > this.POLL_TIMEOUT_MS) {
       this.stopPoll();
-      this.progressText.textContent = 'Reading timed out';
-      this.msg('The server took too long to process this image. Please try a smaller or clearer photo.', 'err');
+      this.progressText.textContent = 'Processing timed out';
+      this.msg('This image took too long to process. Try a smaller file, a clearer photo, or one with less text.', 'err');
       this.reset();
       return;
     }
@@ -250,7 +250,9 @@ class DocTranslateApp {
         this.onOcrDone(d);
       } else if (d.status === 'failed') {
         this.stopPoll();
-        this.msg('Unable to read text from this image. Try a clearer photo.', 'err');
+        // Try to show backend error detail if available
+        const failMsg = d.explanation || d.confidence_notes || 'Unable to read text from this image. Try a clearer photo.';
+        this.msg(failMsg, 'err');
         this.reset();
       } else {
         // Show phase-specific progress using ocr_status field

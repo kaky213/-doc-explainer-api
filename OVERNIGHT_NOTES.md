@@ -397,4 +397,147 @@ The app now completes end-to-end within the 90s poll timeout even for worst-case
 
 **Result:** 19/19 tests passing, all green.
 
+**Commit:** `d434a96`
+
+---
+
+### 🔧 Iteration 11: OCR reliability audit — full pipeline failure point analysis (2026-05-11)
+
+#### Pipeline Map & Failure Points
+
+**1. Upload / Image Validation**
+- ✅ File extension check (`.txt`, `.png`, `.jpg`, `.jpeg`)
+- ✅ `image.verify()` — quick integrity check
+- ✅ Size capped at 10MB for images
+- ⚠️ **No image dimension validation** — extreme resolutions (e.g., 12,000×9,000) pass through and waste time
+- ⚠️ **No pixel dimension limit** — 10MB JPEG can be 5000×5000+. Resized to 1200px max, but the decode itself is slow
+- ⚠️ **No format-in-depth check** — `.jpg` can be CMYK or other non-RGB formats that crash cv2
+
+**2. Image Decode → NumPy (process_document_background -> Image.open)**
+- ⚠️ `Image.open()` + `image.verify()` loads metadata only; the pixel decode happens on first `np.array()` inside `preprocess_for_ocr`
+- ⚠️ No try/except around the Image → np.array conversion itself
+
+**3. Preprocessing (preprocess_for_ocr)**
+- ✅ Grayscale conversion
+- ✅ Downscale to 1200px max side (good for performance)
+- ✅ CLAHE contrast enhancement
+- ✅ OSD-based autorotation
+- ⚠️ **Only ONE preprocessing path** — if CLAHE makes a low-contrast image *worse* (common for washed-out receipts), there's no fallback to try "original grayscale" or "no CLAHE"
+- ⚠️ **OSD rotation can be wrong** — `image_to_osd` with `--psm 0` and 5 min chars can misdetect orientation on noisy images, rotating text upside-down
+- ⚠️ **No bilateral filter or denoising** — noisy/low-light photos have speckle noise that reduces OCR quality
+- ⚠️ **No upscale for tiny images** — if someone takes a photo of a credit card from 10 feet (e.g., 100×50px text region), no upscaling before OCR
+
+**4. ROI Detection (detect_text_roi)**
+- ✅ Canny edge detection
+- ✅ Contour scoring (center_weighted, area_ratio, aspect_ratio)
+- ✅ 15% margin central-crop fallback
+- ⚠️ **Canny with hardcoded thresholds (30,120)** — works well for high-contrast but misses low-contrast or shadowed text regions
+- ⚠️ **Contour fallback to central crop** — on photos with text at the edge (e.g., corner of a shipping label), the central 15%-margin crop may clip content
+- ⚠️ **No multi-pass ROI detection** — if the contour method fails, only tries one fallback (central crop), not original or other strategies
+
+**5. OCR Variant Building (build_ocr_variants)**
+- ✅ Original grayscale
+- ✅ Otsu thresholding (good for scanned docs with even contrast)
+- ✅ Adaptive thresholding (good for uneven lighting)
+- ⚠️ **No INVERT variant** — bright-text-on-dark-background (common in signs with colored backgrounds) fails both Otsu and adaptive because they assume dark text on light bg
+- ⚠️ **No high-contrast variant** — for screenshots/slides, a simple brightness+contrast boost can yield better results than adaptive
+- ⚠️ **No noise-reduced variant** — no bilateral filter or median blur path
+
+**6. OCR Strategy (run_best_effort_ocr)**
+- ✅ Deadline propagation
+- ✅ Adaptive timeout checks between variant loops
+- ✅ Language word bonus scoring
+- ✅ Early exit on high confidence
+- ⚠️ **Tier 2 multi-lang is too narrow** — if eng fails and eng+spa also fails, no further fallback languages tried (no deu, fra, ita, por, nld)
+- ⚠️ **Tier 2 only fires if best["score"] < 15** — this is a very low threshold. A score of 15 would be ~10 short words. If eng returns "the and is in of" (score ~30 but no real content), Tier 2 is skipped
+- ⚠️ **No multi-pass for zero-text** — if all variants return no text, the function returns empty string with no attempt at different preprocessing parameters
+- ⚠️ **`debug_ocr_flow()` is called at return** — looks like a debug-only wrapper, verify it doesn't modify output
+
+**7. Translation (translate endpoint)**
+- ✅ Two-tier (MyMemory first, DeepSeek fallback)
+- ✅ Best-effort mode for partial text (length ≥ 40, alpha ratio ≥ 0.4, conf ≥ 20)
+- ✅ Retry tips for low quality
+- ⚠️ **MyMemory-only fallback has no original text fallback** — if MyMemory + DeepSeek BOTH fail, the fallback `[lang] doc.extracted_text[:500]` silently truncates to 500 chars
+- ⚠️ **explain_with_deepseek requires DeepSeek key** — if key is missing, explanation = generic placeholder phrase, not the translated text presented as-is
+
+**8. Analysis (analyze_document_content)**
+- ✅ Full fallback when DeepSeek key missing or call fails
+- ✅ JSON repair via regex extraction
+- ✅ Auto-population of key_details from structured fields + summary regex
+- ⚠️ **No analysis for low-quality OCR** — reasonable by design, but the summary says "too blurry or unclear" even for cases where most text was read but confidence flagged
+- ⚠️ **Heuristic fallback (no DeepSeek key)** — returns a generic message with no content-specific analysis
+
+**9. Frontend Polling**
+- ✅ Adaptive backoff (100ms, 2s, 3s, 5s)
+- ✅ Timeout at 63s with clear error message
+- ✅ Transient error retry (network blips don't abort)
+- ⚠️ **FAILED status only shows generic message** — "Unable to read text from this image. Try a clearer photo." — the actual error detail from the backend is never shown to the user
+- ⚠️ **"Reading timed out" error is somewhat technical** — could say "The server took too long" but doesn't suggest a specific next action
+- ⚠️ **No frontend image pre-check** — very large uploads are sent before the backend rejects them
+
+#### Summary: 8 confirmed improvement areas
+
+| # | Area | Risk | Effort |
+|---|------|------|--------|
+| 1 | Multi-path preprocessing (fallback if CLAHE hurts) | Medium | Low |
+| 2 | Image dimension/format pre-validation | Low | Low |
+| 3 | INVERT + high-contrast OCR variants | Medium | Low |
+| 4 | Better Tier 2 multi-lang fallback (fr, de, pt, it) | Medium | Low |
+| 5 | Text quality heuristics (garbage detection, printable ratio) | Medium | Low |
+| 6 | ROI detection: adaptive Canny thresholds + multiple passes | Medium | Medium |
+| 7 | Translation fallback: whole text instead of [:500] truncation | Low | Low |
+| 8 | Frontend error messages: show backend detail, suggest actions | Low | Low |
+
+---
+
+### 🔧 Iteration 12: OCR reliability — multi-variant preprocessing, fallback langs, image validation, text quality (2026-05-11)
+
+**Changes made:**
+
+#### 1. Robust multi-variant OCR pipeline (`build_ocr_variants`)
+- **Before**: 3 variants (original, Otsu, adaptive)
+- **After**: 6 variants (original, Otsu, adaptive, **invert**, **denoised**, **high_contrast**)
+  - `invert` — Otsu on inverted image. Fixes light-text-on-dark-bg (signs, stickers, labels with colored backgrounds)
+  - `denoised` — median filter for noisy/low-light camera photos
+  - `high_contrast` — alpha=2.0 beta=-30 stretch for washed-out/low-contrast images
+- Prevents the case where all 3 original variants fail on inverted-text layouts
+
+#### 2. Better Tier 2 multi-language fallback (`run_best_effort_ocr`)
+- **Before**: Only tried `eng+spa` (1 fallback lang combo) when English produced no text
+- **After**: Tries `eng+spa`, `eng+fra`, `eng+deu`, `eng+por`, `eng+spa+fra`, `eng+ita` progressively
+  - Each tried only on variants where eng found nothing (avoids redundant work)
+  - Early-exits when a combo scores > 20 (good enough to stop)
+  - Fixes: German/French/Portuguese/Italian docs that eng+spa couldn't read
+
+#### 3. Image pre-validation on upload
+- Added early dimension check before processing:
+  - Rejects images > 8000px on any side (prevents OOM/crash on extreme-res images)
+  - Rejects images < 20x20px (too small to OCR)
+  - Uses `Image.open()` header-only read (fast, no pixel decode)
+  - Graceful if validation fails — lets processing pipeline try
+- All checked **before** the file is committed to the document store
+
+#### 4. Garbage text detection improvement (`score_ocr_text`)
+- Added symbol density penalty: if >30% of chars are non-alphanumeric symbols, heavy penalty applied
+- Moderate penalty if >15% symbols
+- Short but clean text (dates, names, prices) gets a small bonus instead
+- Prevents garbage OCR output (e.g., "~!@#$%^&*()_+") from scoring higher than real short text
+
+#### 5. Better quality classification (`ocr_quality_from_score`)
+- Returns `"none"` for truly empty text (vs. silently marking as "low")
+- More permissive for long text (≥60 chars, alpha ≥0.5, word count ≥8) even with moderate confidence
+- Handles short-but-clear text (≥10 chars, alpha ≥0.6, conf ≥50) as usable
+- Prioritizes real content volume over raw confidence scores
+
+#### 6. Translation fallback no longer truncates
+- **Before**: `doc.extracted_text[:500]` — silently cut off at 500 chars
+- **After**: Full text with `(translation unavailable)` prefix. Only truncates if >5000 chars (practically never for OCR)
+- Adds honest language prefix so user knows translation wasn't available
+
+#### 7. Frontend error message improvements
+- Timeout message: "Reading timed out" → "This image took too long to process. Try a smaller file, a clearer photo, or one with less text."
+- FAILED status now shows the backend's actual error detail (`d.explanation` or `d.confidence_notes`) instead of generic "Try a clearer photo"
+
+**Result:** 19/19 tests passing, all green.
+
 **Commit:** `<pending>`
