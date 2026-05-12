@@ -28,9 +28,67 @@
 - **No source language selector**: User can only choose target language. Source is always auto-detected.
 - **No visual grouping**: Languages not organized by script.
 
-**Tesseract Packs Installed:** chi_sim, deu, eng, fra, ita, osd, por, spa (8 packs)
-**Missing for priority languages:** nld, rus, ara, hin, chi_tra, jpn, kor
+**Tesseract Packs Installed (before):** chi_sim, deu, eng, fra, ita, osd, por, spa (8 packs)
+**Tesseract Packs Installed (after):** +nld, rus, ara, hin, chi_tra, jpn, kor (15 packs)
 
-**Tests:**
-- `test_app.py`: Tests only English OCR paths. No multilingual OCR tests.
+**Tests (before):**
+- `test_app.py`: Only English OCR paths. No multilingual OCR tests.
 - `test_ocr_reliability.py`: English synthetic images. No non-Latin script tests.
+
+---
+
+#### Changes Made
+
+**config.py** (new):
+- Centralized ALL constants: SUPPORTED_TARGET_LANGUAGES, LANG_SCRIPT_GROUPS,
+  ISO_TO_TESSERACT, TESSERACT_SCRIPT_GROUPS, SCRIPT_OCR_STRATEGIES,
+  GENERAL_FALLBACK_LANGS, MYMEMORY_WEAK_LANGS, all file/path limits
+- Each script group has its own OCR strategy (primary, fallback combos)
+- CJK scripts separated by language (never combine chi_sim+jpn+kor)
+
+**lang_detect.py** (new):
+- `detect_script_from_text()`: Unicode range analysis for Latin, Cyrillic,
+  Arabic, Devanagari, Han, Kana, Hangul. Returns {scripts, dominant, pct, is_mixed}
+- `detect_language_from_ocr_text()`: Returns {lang, confidence, script}
+  - Script routing: if dominant is Arabic → return ar, Devanagari → hi, etc.
+  - Latin scoring: function words × 7 langs + accented chars + strong clues
+  - CJK: checks for kana presence to differentiate Japanese vs Chinese
+- `normalize_lang_code()`: Full mapping from all codes to ISO 639-1
+- `normalize_to_tesseract()`: ISO 639-1 → Tesseract 3-letter codes
+
+**app.py changes:**
+- Replaced old `detect_language_from_ocr_text` (5 lang, hardcoded) →
+  delegates to lang_detect module (14 lang, script-aware)
+- Replaced old `language_word_bonus` (5 lang dict) → confidence-based from lang_detect
+- Replaced old `normalize_lang_code` (inline dict) → delegates to lang_detect
+- OCR Tier 2: script-aware fallback — detects script from partial text,
+  picks appropriate language pack (rus/ara/hin/chi_sim/jpn/kor) before general fallback
+- Added Tier 3: general fallback for when script-specific also fails
+- Translation: skip MyMemory for CJK/Arabic/Devanagari → direct to DeepSeek
+- Best-effort language fallback: uses proper detect_language_from_ocr_text instead
+  of hardcoded fr/it/es food word lists
+
+**Frontend (index.html + app.js):**
+- Source language selector (auto-detect + all 14 langs, grouped by script)
+- Target language: 7→14 options, grouped by script with optgroup labels
+- Retry dropdown: same 14 options
+- langName(): expanded to cover all 14 languages
+- translate()/retranslate()/forceTrans(): all send source_language_hint
+- Results display: syncs source selector to detected language
+
+**Dockerfile:**
+- Added nld, rus, ara, hin, chi_tra, jpn, kor Tesseract packages
+- Organized by script with comments for maintainability
+
+**Tesseract packs installed locally:** 15 total (all verified working)
+
+#### Remaining / Future Work
+
+- **Source_language_hint in OCR pipeline**: Currently hint only flows to
+  translation, not to run_best_effort_ocr. Could optimize OCR by passing
+  the hint to skip English-first when user says the doc is Arabic.
+- **Non-Latin test fixtures**: Reliability tests only generate Latin images.
+  Should add synthetic Russian/Arabic/Hindi/CJK images.
+- **MyMemory+DeepSeek combo**: For Latin translations, MyMemory works fine.
+  For CJK etc, goes direct to DeepSeek (requires DEEPSEEK_API_KEY env var).
+  Could try combining: MyMemory for phrase-level, DeepSeek for polishing.
