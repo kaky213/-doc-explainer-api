@@ -1,0 +1,592 @@
+INFO:     Started server process [18121]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:58658 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:58660 - "GET /static/index.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58674 - "GET /docs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58686 - "GET /documents HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:56270 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:56298 - "GET /static/index.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56312 - "GET /docs HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56326 - "GET /documents HTTP/1.1" 403 Forbidden
+INFO:     192.168.1.240:42982 - "GET /static/index.html HTTP/1.1" 200 OK
+INFO:     192.168.1.240:42982 - "GET /static/style.css?v=20260504 HTTP/1.1" 200 OK
+INFO:     192.168.1.240:42992 - "GET /static/app.js?v=20260504 HTTP/1.1" 200 OK
+INFO:     192.168.1.240:42992 - "GET /health HTTP/1.1" 200 OK
+INFO:     192.168.1.240:42982 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     145.223.7.34:0 - "GET / HTTP/1.1" 307 Temporary Redirect
+INFO:     145.223.7.34:0 - "GET /static/index.html HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /static/style.css?v=20260504 HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /static/app.js?v=20260504 HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /health HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     145.223.7.34:0 - "GET /static/index.html HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /static/style.css?v=20260504 HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /static/app.js?v=20260504 HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /health HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "POST /documents/upload HTTP/1.1" 200 OK
+INFO:app:Starting background processing for document ac97789a-f361-4c66-888a-fc9dcc091cbd: fench.jpg
+WARNING:app:ROI detection failed: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+INFO:app:Preprocess: orig=(268, 300), resized=(268, 300), deskew=none
+INFO:app:ROI detection: method=original, confidence=0.0, original=(268, 300), roi=(268, 300)
+INFO:app:Early exit: confidence=91.2%, score=190.7
+INFO:app:Early exit: skipping remaining variants
+INFO:app:OCR debug - Text length: 50, Language: eng
+INFO:app:OCR debug - Confidence: 91.16666666666666, Quality: high
+INFO:app:OCR debug - ROI method: original, ROI confidence: 0.0
+INFO:app:OCR debug - Original size: (268, 300), ROI size: (268, 300)
+INFO:app:Starting document analysis for document ac97789a-f361-4c66-888a-fc9dcc091cbd
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/chat/completions "HTTP/1.1 200 OK"
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:app:Document analysis completed in 7961 ms
+INFO:app:Background processing COMPLETED for document ac97789a-f361-4c66-888a-fc9dcc091cbd
+INFO:app:  - Filename: fench.jpg
+INFO:app:  - Language: eng
+INFO:app:  - Confidence: 91.16666666666666
+INFO:app:  - Quality: high
+INFO:app:  - Text preview: ACARTOUCHE RESPIRATEUR OBLIGATOIRE
+DANS CETTE ZONE...
+INFO:app:Timing: doc ac97789a-f361-4c66-888a-fc9dcc091cbd total=8482 ms, ocr=466 ms, translation=0 ms
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "POST /documents/upload HTTP/1.1" 200 OK
+INFO:app:Starting background processing for document 4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a: french menu.jpg
+WARNING:app:ROI detection failed: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+INFO:app:Preprocess: orig=(612, 459), resized=(612, 459), deskew=none
+INFO:app:ROI detection: method=original, confidence=0.0, original=(612, 459), roi=(612, 459)
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:app:OCR debug - Text length: 279, Language: ita
+INFO:app:OCR debug - Confidence: 58.61212121212122, Quality: low
+INFO:app:OCR debug - ROI method: original, ROI confidence: 0.0
+INFO:app:OCR debug - Original size: (612, 459), ROI size: (612, 459)
+INFO:app:Starting document analysis for document 4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/chat/completions "HTTP/1.1 200 OK"
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:app:Document analysis completed in 10626 ms
+INFO:app:Background processing COMPLETED for document 4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a
+INFO:app:  - Filename: french menu.jpg
+INFO:app:  - Language: ita
+INFO:app:  - Confidence: 58.61212121212122
+INFO:app:  - Quality: low
+INFO:app:  - Text preview: cnt de Canard “SALADES: panne sues d LI ail 1470 "
+Salade CH (ésar_ ian ge
+vote Salade Famew.” fe PO...
+INFO:app:Timing: doc 4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a total=40547 ms, ocr=29860 ms, translation=0 ms
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/ac97789a-f361-4c66-888a-fc9dcc091cbd HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /static/index.html HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /static/style.css?v=20260504 HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /static/app.js?v=20260504 HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /health HTTP/1.1" 200 OK
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "POST /documents/upload HTTP/1.1" 200 OK
+INFO:app:Starting background processing for document 8ec5a477-9b3d-4bb5-902b-ed37ee435f91: german.jpg
+WARNING:app:ROI detection failed: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+INFO:app:Preprocess: orig=(300, 226), resized=(300, 226), deskew=none
+INFO:app:ROI detection: method=original, confidence=0.0, original=(300, 226), roi=(300, 226)
+INFO:     145.223.7.34:0 - "GET /documents/4bbf519a-ef76-4c8c-9f13-c097dc8f1b8a HTTP/1.1" 403 Forbidden
+INFO:app:Early exit: confidence=93.0%, score=196.1
+INFO:app:Early exit: skipping remaining variants
+INFO:app:OCR debug - Text length: 11, Language: deu
+INFO:app:OCR debug - Confidence: 93.0, Quality: high
+INFO:app:OCR debug - ROI method: original, ROI confidence: 0.0
+INFO:app:OCR debug - Original size: (300, 226), ROI size: (300, 226)
+INFO:app:Starting document analysis for document 8ec5a477-9b3d-4bb5-902b-ed37ee435f91
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/chat/completions "HTTP/1.1 200 OK"
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:app:Document analysis completed in 6170 ms
+INFO:app:Background processing COMPLETED for document 8ec5a477-9b3d-4bb5-902b-ed37ee435f91
+INFO:app:  - Filename: german.jpg
+INFO:app:  - Language: deu
+INFO:app:  - Confidence: 93.0
+INFO:app:  - Quality: high
+INFO:app:  - Text preview: ELEKTRISCHE...
+INFO:app:Timing: doc 8ec5a477-9b3d-4bb5-902b-ed37ee435f91 total=7945 ms, ocr=1724 ms, translation=0 ms
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     145.223.7.34:0 - "GET /documents/8ec5a477-9b3d-4bb5-902b-ed37ee435f91 HTTP/1.1" 403 Forbidden
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18121]

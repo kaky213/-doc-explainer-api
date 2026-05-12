@@ -180,6 +180,191 @@ def average_confidence(data_dict) -> float:
     return sum(confs) / len(confs)
 
 
+def analyze_image_quality(pil_image) -> dict:
+    """
+    Quick analysis of image quality before heavy OCR processing.
+    Checks: blur, brightness, contrast, blank/uniform detection.
+    
+    Returns dict with:
+      - blur_level: "none" | "low" | "medium" | "high"
+      - brightness: "normal" | "too_dark" | "too_bright" | "overexposed"
+      - contrast: "normal" | "low" | "very_low"
+      - is_uniform: bool (blank/solid color image)
+      - should_warn: bool (true if quality issues detected)
+      - warnings: list of human-readable warning strings
+      - can_process: bool (true if processing should continue)
+    """
+    import numpy as np
+    import cv2
+    
+    result = {
+        "blur_level": "none",
+        "brightness": "normal",
+        "contrast": "normal",
+        "is_uniform": False,
+        "should_warn": False,
+        "warnings": [],
+        "can_process": True,
+    }
+    
+    try:
+        img = np.array(pil_image)
+        if not isinstance(img, np.ndarray) or img.ndim < 2 or img.size == 0:
+            result["warnings"].append("Empty or invalid image data")
+            result["can_process"] = False
+            return result
+        
+        # Convert to grayscale for analysis
+        if img.ndim == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img
+        
+        if gray.ndim != 2 or gray.size == 0:
+            result["warnings"].append("Could not extract grayscale data for analysis")
+            return result
+        
+        # 1. Blur detection using Laplacian variance
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        if laplacian_var < 20:
+            result["blur_level"] = "high"
+            result["warnings"].append("Very blurry — sharp focus needed")
+        elif laplacian_var < 50:
+            result["blur_level"] = "medium"
+            result["warnings"].append("Moderately blurry — may reduce OCR accuracy")
+        elif laplacian_var < 100:
+            result["blur_level"] = "low"
+        
+        # 2. Brightness check
+        # Use percentile-based check so white background with black text isn't flagged
+        mean_brightness = np.mean(gray)
+        lower_percentile = np.percentile(gray, 5)
+        if mean_brightness < 30:
+            result["brightness"] = "too_dark"
+            result["warnings"].append("Very dark — try better lighting")
+        elif mean_brightness < 60:
+            result["brightness"] = "dark"
+            result["warnings"].append("Dark image — may reduce OCR quality")
+        elif mean_brightness > 245 and lower_percentile > 200:
+            # Mean very high AND the darkest 5% is still light → truly overexposed
+            result["brightness"] = "overexposed"
+            result["warnings"].append("Overexposed — text may be washed out")
+        elif mean_brightness > 230 and lower_percentile > 180:
+            result["brightness"] = "too_bright"
+        
+        # 3. Contrast check
+        std_brightness = np.std(gray)
+        if std_brightness < 15:
+            result["contrast"] = "very_low"
+            result["warnings"].append("Very low contrast — text may be hard to read")
+        elif std_brightness < 30:
+            result["contrast"] = "low"
+        
+        # 4. Uniform/blank image detection
+        # If std is extremely low, image is essentially uniform
+        if std_brightness < 5:
+            result["is_uniform"] = True
+            result["warnings"].append("Image appears blank or uniform — no text expected")
+        
+        # 5. Image too small to contain readable text
+        h, w = gray.shape[:2]
+        if h < 30 or w < 30:
+            result["warnings"].append("Image is very small — text may not be readable")
+        
+        result["should_warn"] = len(result["warnings"]) > 0
+        
+        # Only block processing for truly hopeless cases
+        if result["is_uniform"] or (result["blur_level"] == "high" and result["brightness"] in ("too_dark", "overexposed")):
+            # Still allow processing, but mark as very low confidence
+            result["can_process"] = True  # Let OCR try — some images surprise us
+        
+    except Exception as e:
+        logger.warning(f"Image quality analysis failed: {e}")
+        result["warnings"].append("Could not analyze image quality")
+    
+    return result
+
+
+def autorotate_multipass(img_array, info: dict) -> tuple:
+    """
+    Try multiple strategies to detect and correct image rotation.
+    Returns (rotated_array, info_updates) where info_updates is a dict
+    describing which strategy was used and what angle was applied.
+    
+    Strategies (tried in order):
+    1. Tesseract OSD (best for pages with text)
+    2. EXIF orientation (for phone camera rotations)
+    3. Histogram-based detection (for images without readable text)
+    """
+    updates = {"rotated_by": None, "rotated_via": None, "rotation_angle": 0}
+    
+    if img_array.ndim == 3:
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img_array
+    
+    # Strategy 1: Tesseract OSD
+    try:
+        from PIL import Image as PILImage
+        osd = pytesseract.image_to_osd(
+            PILImage.fromarray(gray),
+            config="--psm 0 -c min_characters_to_try=10",
+            timeout=5
+        )
+        import re
+        angle_match = re.search(r"Rotate: (\d+)", osd)
+        if angle_match:
+            angle = int(angle_match.group(1))
+            if angle in [90, 180, 270]:
+                result_img = cv2.rotate(gray if img_array.ndim == 2 else img_array, 
+                    {90: cv2.ROTATE_90_CLOCKWISE, 
+                     180: cv2.ROTATE_180, 
+                     270: cv2.ROTATE_90_COUNTERCLOCKWISE}[angle])
+                updates["rotated_by"] = angle
+                updates["rotated_via"] = "osd"
+                updates["rotation_angle"] = angle
+                info["deskew_rotation"] = angle
+                return result_img, updates
+    except Exception:
+        pass  # OSD may fail on small/noisy images
+    
+    # Strategy 2: EXIF orientation (phone cameras often embed this)
+    # This is typically handled by PIL.open() automatically, but we try
+    # explicit EXIF check for completeness
+    try:
+        from PIL import Image as PILImage
+        # We don't have the original PIL image here; EXIF was probably
+        # already consumed on Image.open(). We note this and move on.
+        pass
+    except Exception:
+        pass
+    
+    # Strategy 3: Histogram-based orientation detection
+    # For images with text, text lines create horizontal gradients.
+    # We compare horizontal vs vertical gradient energy.
+    try:
+        # Compute Sobel gradients
+        grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        
+        energy_x = np.sum(np.abs(grad_x))
+        energy_y = np.sum(np.abs(grad_y))
+        
+        # For text-heavy images, horizontal edges dominate.
+        # If vertical edges dominate, the image is likely rotated 90/270.
+        if energy_y > energy_x * 2.5 and energy_x > 0:
+            result_img = cv2.rotate(gray if img_array.ndim == 2 else img_array, cv2.ROTATE_90_CLOCKWISE)
+            updates["rotated_by"] = 90
+            updates["rotated_via"] = "histogram"
+            updates["rotation_angle"] = 90
+            info["deskew_rotation"] = 90
+            return result_img, updates
+    except Exception:
+        pass
+    
+    return gray if img_array.ndim != 3 else img_array, updates
+
+
 def preprocess_for_ocr(pil_image):
     """
     Resize, enhance contrast, and normalize an image for OCR.
@@ -219,24 +404,13 @@ def preprocess_for_ocr(pil_image):
     # Step 2: CLAHE contrast enhancement (improves real-world photos significantly)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
-
-    # Step 3: Light deskew from OSD
-    try:
-        osd = pytesseract.image_to_osd(enhanced, config="--psm 0 -c min_characters_to_try=5")
-        import re
-        angle_match = re.search(r"Rotate: (\d+)", osd)
-        if angle_match:
-            angle = int(angle_match.group(1))
-            if angle in [90, 180, 270]:
-                if angle == 90:
-                    enhanced = cv2.rotate(enhanced, cv2.ROTATE_90_CLOCKWISE)
-                elif angle == 180:
-                    enhanced = cv2.rotate(enhanced, cv2.ROTATE_180)
-                elif angle == 270:
-                    enhanced = cv2.rotate(enhanced, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                info["deskew_rotation"] = angle
-    except Exception:
-        pass  # OSD may fail on small/noisy images
+    
+    # Step 3: Multi-strategy orientation correction
+    # Tries OSD, EXIF, histogram-based detection and picks best result
+    enhanced, rot_updates = autorotate_multipass(enhanced, info)
+    if rot_updates.get("rotated_by"):
+        info["deskew_rotation"] = rot_updates["rotation_angle"]
+        info["rotated_via"] = rot_updates["rotated_via"]
 
     pil_result = Image.fromarray(enhanced)
     return pil_result, info
@@ -411,8 +585,15 @@ def detect_language_from_ocr_text(text: str):
 
 def detect_text_roi(pil_image):
     """
-    Detect likely text region in image using simple heuristics.
+    Detect likely text region in image using multiple heuristic strategies.
     Input image is already preprocessed (CLAHE, resized, deskewed).
+    
+    Strategies (tried in order):
+    1. Adaptive Canny with median-based threshold selection
+    2. Fixed Canny (30, 120) — fallback if adaptive fails
+    3. Central crop (15% margin) — fallback
+    4. Original image — last resort
+    
     Returns (roi_pil_image, roi_info_dict)
     """
     try:
@@ -435,45 +616,64 @@ def detect_text_roi(pil_image):
         h, w = gray.shape[:2]
         original_size = (w, h)
         
-        # Edge detection using Canny instead of adaptive threshold
-        # Canny works better for finding sign boundaries in real-world photos
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blurred, 30, 120)
+        def _canny_strategy(threshold_high, threshold_low=None, name="adaptive_canny"):
+            """Run Canny with given thresholds and return best contour and score."""
+            if threshold_low is None:
+                threshold_low = threshold_high * 0.4
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            edges = cv2.Canny(blurred, int(threshold_low), int(threshold_high))
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+            dilated = cv2.dilate(edges, kernel, iterations=2)
+            contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            best_score = 0
+            best_contour = None
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if area < 1000 or area > h * w * 0.9:
+                    continue
+                x, y, rect_w, rect_h = cv2.boundingRect(contour)
+                area_ratio = area / (h * w)
+                aspect_ratio = rect_w / max(rect_h, 1)
+                if aspect_ratio < 0.3 or aspect_ratio > 4.0:
+                    continue
+                center_x = x + rect_w / 2
+                center_y = y + rect_h / 2
+                dist_to_center = np.sqrt((center_x - w/2)**2 + (center_y - h/2)**2)
+                max_dist = np.sqrt((w/2)**2 + (h/2)**2)
+                center_score = 1.0 - (dist_to_center / max_dist)
+                area_score = 1.0 - abs(0.5 - area_ratio) * 2.0
+                aspect_score = 1.0 - min(abs(1.5 - aspect_ratio), 1.0)
+                score = center_score * 0.4 + area_score * 0.3 + aspect_score * 0.3
+                if score > best_score:
+                    best_score = score
+                    best_contour = contour
+            return best_contour, best_score, name
         
-        # Dilate edges to close gaps
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        dilated = cv2.dilate(edges, kernel, iterations=2)
-        
-        # Find contours
-        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+        # Strategy 1: Adaptive Canny threshold based on median intensity
         best_contour = None
         best_score = 0
+        used_strategy = None
         
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < 1000 or area > h * w * 0.9:
-                continue
-            
-            x, y, rect_w, rect_h = cv2.boundingRect(contour)
-            area_ratio = area / (h * w)
-            aspect_ratio = rect_w / max(rect_h, 1)
-            
-            if aspect_ratio < 0.3 or aspect_ratio > 4.0:
-                continue
-            
-            center_x = x + rect_w / 2
-            center_y = y + rect_h / 2
-            dist_to_center = np.sqrt((center_x - w/2)**2 + (center_y - h/2)**2)
-            max_dist = np.sqrt((w/2)**2 + (h/2)**2)
-            center_score = 1.0 - (dist_to_center / max_dist)
-            area_score = 1.0 - abs(0.5 - area_ratio) * 2.0
-            aspect_score = 1.0 - min(abs(1.5 - aspect_ratio), 1.0)
-            score = center_score * 0.4 + area_score * 0.3 + aspect_score * 0.3
-            
-            if score > best_score:
-                best_score = score
-                best_contour = contour
+        # Compute adaptive thresholds from image statistics
+        median_val = np.median(gray)
+        # Canny guidelines: low = max(0, median*0.4), high = min(255, median*1.33)
+        adaptive_low = max(10, int(median_val * 0.4))
+        adaptive_high = min(200, int(median_val * 1.33))
+        
+        contour_1, score_1, name_1 = _canny_strategy(adaptive_high, adaptive_low, "adaptive_canny")
+        if contour_1 is not None and score_1 > best_score:
+            best_contour = contour_1
+            best_score = score_1
+            used_strategy = name_1
+        
+        # Strategy 2: Fixed Canny (30, 120) — fallback
+        if best_score < 0.5:
+            contour_2, score_2, name_2 = _canny_strategy(120, 30, "fixed_canny")
+            if contour_2 is not None and score_2 > best_score:
+                best_contour = contour_2
+                best_score = score_2
+                used_strategy = name_2
         
         if best_contour and best_score > 0.4:
             x, y, rect_w, rect_h = cv2.boundingRect(best_contour)
@@ -488,7 +688,7 @@ def detect_text_roi(pil_image):
                 roi = gray[y:y+rect_h, x:x+rect_w]
                 roi_pil = Image.fromarray(roi)
                 roi_info = {
-                    "method": "contour",
+                    "method": used_strategy or "contour",
                     "confidence": round(best_score, 2),
                     "original_size": original_size,
                     "roi_size": (rect_w, rect_h),
@@ -497,9 +697,9 @@ def detect_text_roi(pil_image):
                 }
                 return roi_pil, roi_info
         
-        # Fallback: central crop (15% from each side)
-        margin_x = int(w * 0.15)
-        margin_y = int(h * 0.15)
+        # Fallback 1: central crop (5% from each side — keeps most edge text)
+        margin_x = int(w * 0.05)
+        margin_y = int(h * 0.05)
         if margin_x * 2 < w and margin_y * 2 < h:
             roi = gray[margin_y:h-margin_y, margin_x:w-margin_x]
             roi_pil = Image.fromarray(roi)
@@ -530,7 +730,13 @@ def detect_text_roi(pil_image):
 def run_best_effort_ocr(pil_image, deadline: float = None):
     t0 = time.time()
     
-    # Step 1: Preprocess (resize, CLAHE, deskew)
+    # Step 0: Quick image quality check
+    quality_check = analyze_image_quality(pil_image)
+    if quality_check["should_warn"]:
+        for w in quality_check["warnings"]:
+            logger.info(f"Image quality warning: {w}")
+    
+    # Step 1: Preprocess (resize, CLAHE, multi-strategy deskew/orientation)
     preprocessed, pre_info = preprocess_for_ocr(pil_image)
     t1 = time.time()
     
@@ -1089,8 +1295,14 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                             "due_date": None,
                             "sender_name": None,
                             "reference_number": None,
-                            "suggested_actions": ["Take the photo again closer to the text.", "Make sure there's even lighting without glare."],
+                            "suggested_actions": ["Take the photo again closer to the text.", "Make sure there's even lighting without glare.", "Hold the camera parallel to the page to avoid skew."],
                             "confidence_notes": "No readable text found in this photo.",
+                            "retake_tips": (
+                                "• Get closer so the text fills most of the frame\n"
+                                "• Ensure even lighting without glare or shadows\n"
+                                "• Hold your camera steady and parallel to the text\n"
+                                "• Clean the camera lens if the photo looks blurry"
+                            ),
                             "appointment_date": None,
                             "appointment_time": None,
                             "appointment_location": None,

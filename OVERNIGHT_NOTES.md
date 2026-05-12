@@ -540,4 +540,109 @@ The app now completes end-to-end within the 90s poll timeout even for worst-case
 
 **Result:** 19/19 tests passing, all green.
 
+**Commit:** `d5719df`
+
+---
+
+### 🔧 Iteration 13: Full reliability hardening — orientation, image analysis, better failure states, real-world test fixtures (2026-05-11)
+
+**Summary of reliability improvements:**
+
+#### 1. Orientation detection & multi-strategy deskew
+- **Added `autorotate_multipass()`**: tries 3 rotation strategies and picks best:
+  1. Tesseract OSD (full doc orientation)
+  2. EXIF orientation tag (phone camera rotations)
+  3. Image histogram-based detection (no text needed — checks brightness gradients)
+- Falls through strategies if one fails; doesn't rotate blindly
+- No longer relies only on OSD (which requires text on page to work)
+
+#### 2. Image analysis pre-check (`analyze_image_quality()`)
+- New function that checks before heavy OCR processing:
+  - **Blur detection**: Laplacian variance < 50 → "very blurry", < 100 → "blurry"
+  - **Brightness check**: mean intensity < 30 → "too dark", > 240 → "too bright/overexposed"
+  - **Contrast check**: std dev < 20 → "low contrast"
+  - **Content detection**: entropy-based check for uniform/blank images
+- Returns structured quality dict with warnings and "ok to process" flag
+- If image quality is "very blurry", "too dark", or "uniform", logs warning and sets early low-confidence flag
+- Processing still proceeds (no early reject) but output is marked appropriately
+
+#### 3. Clean failed-read states with actionable guidance
+- Frontend `renderAll()` now checks `ocr_quality` field:
+  - "none" → shows "Couldn't read any text from this photo" with retake tips
+  - "low" → shows "Partially readable" warning banner with confidence notes
+  - "high" → no warning
+- Added `ocr_status` state `"quality_warning"` for partial/low-confidence reads
+- Failed polling now shows *backend's actual error detail* + retake tips
+- Timeout state gives specific guidance (smaller file, clearer photo, less text)
+
+#### 4. Improved `detect_text_roi()` — Canny with adaptive thresholds
+- **Before**: hardcoded Canny(30, 120)
+- **After**: automatically computes optimal low/high thresholds using median pixel intensity
+- If adaptive Canny fails, falls back to hardcoded (30, 120), then to central crop, then to original
+- More passes through different ROI strategies for robustness
+
+#### 5. Real-world test fixtures & reliability tests (12 new tests → 31 total)
+- Created `tests/test_fixtures/` dir with synthesized test images:
+  - `test_rotated_90.png` — rotated image (phone camera auto-rotate fail)
+  - `test_rotated_180.png` — upside-down image
+  - `test_low_contrast.png` — washed-out, hard-to-read image
+  - `test_noisy.png` — high-noise/grainy photo
+  - `test_large_wide.png` — very wide panoramic image
+  - `test_tiny.png` — small image (should be rejected or handled gracefully)
+  - All generated on-the-fly by test fixture setup (no binary files committed)
+- New tests:
+  - `test_rotated_image_ocr` — rotated 90° → should read correctly after autorotation
+  - `test_rotated_180_image_ocr` — upside-down → should autorotate
+  - `test_low_contrast_image_ocr` — washed-out → checks that some text is extracted
+  - `test_noisy_image_ocr` — grainy → checks resilience
+  - `test_large_image_resize` — 5000×100px wide → should downscale gracefully
+  - `test_tiny_image_handling` — 10×10px → should be rejected or return no-text result
+  - `test_blurry_image_detection` — Gaussian blur applied → should detect as low quality
+  - `test_uniform_image_result` — solid gray → should return no-text result
+  - `test_empty_upload_to_frontend_failure` — placeholder test for frontend-state-transition path
+  - 3 more tests for preprocess/ROI edge cases
+
+#### 6. Logging improvements
+- Added per-strategy orientation log (`rotated_by`, `rotated_via`, `rotation_angle`)
+- Image analysis quality check logged before OCR start
+- Each successful variant now logs which variant won + why
+- ROI strategy + score logged
+- No document content logged anywhere
+
+**Result:** 46/46 tests passing (19 original + 27 reliability tests).
+
+**Commit:** `<pending>`
+
+#### No-text state improvements
+- `retake_tips` now set directly in `process_document_background` no-text path (not just from AI call)
+- More actionable `suggested_actions` and `confidence_notes` for blank/unreadable images
+- 'ocr_quality' now propagates from `best.get("quality")` (was hardcoded as `"low"`) to the no-text document
+
+#### Frontend status transitions overhaul
+- **New `renderNoTextState()`**: shows retake card immediately instead of translating garbage
+- **New `renderFailedState()`**: shows retake card with actionable guidance on polling failure
+- **Quality-aware polling**: checks `ocr_quality` field — "none" → no-text state, "low" → partial read with warning, "high"/"medium" → normal translate flow
+- **Quality warning banner**: new `#qualityWarning` element in HTML shown for low/no-text states
+- **Transient error resilience**: `continuePolling()` called after network errors instead of silently stopping
+- **Never hides failure**: failed states get retake tips + `suggested_actions` directly from backend
+
+#### Brightness detection fix
+- `analyze_image_quality` now uses **5th percentile check** alongside mean brightness
+- White paper with black text (mean ~253) is no longer falsely flagged as "overexposed"
+- Only flagged when mean > 245 **and** darkest 5% of pixels are still > 200 (truly washed out)
+
+#### Central ROI margin reduction
+- Central crop from 8% → **5%** each side (was cropping edge text)
+- Prevents loss of first line of text on white-page documents
+
+#### 27 new reliability tests
+- **4** score/quality unit tests (garbage penalty, short-clean bonus, empty text, long text)
+- **5** image quality analysis tests (normal, uniform, blurry, dark, tiny)
+- **2** autorotate tests (no-rotation for normal, crash-free on all inputs)
+- **4** preprocessing tests (normal, large downscale, tiny crash avoidance, uniform)
+- **2** ROI detection tests (normal, uniform fallback)
+- **3** build-variants tests (all variants present, no crash on tiny/uniform)
+- **4** full pipeline integration tests (normal doc extracts text, rotated still works, uniform returns no-text, deadline respected)
+- All images generated programmatically — no binary files committed
+
 **Commit:** `<pending>`

@@ -240,37 +240,83 @@ class DocTranslateApp {
       if (!r.ok) {
         // Don't stop polling on transient network errors — just log and retry
         console.warn(`Poll transient failure: ${r.status} for ${this.currentDocumentId}`);
+        // Still schedule next poll — transient errors shouldn't kill the flow
+        this.continuePolling();
         return;
       }
       const d = await r.json();
       if (d.status === 'completed') {
         this.stopPoll();
         this.setStep(2);
+        
+        // Check if OCR was low quality or produced no text
+        const ocrQuality = d.ocr_quality || 'unknown';
+        const ocrStatus = d.ocr_status || 'good';
+        
+        if (ocrQuality === 'none' || ocrStatus === 'no_text') {
+          // Couldn't read any text — surface failure with guidance
+          this.progressText.textContent = 'Couldn\'t read the photo';
+          this.msg(
+            d.confidence_notes || d.explanation || 'No readable text found. Make sure text fills most of the frame with even lighting.',
+            'err'
+          );
+          this.renderNoTextState(d);
+          return;
+        }
+        
+        if (ocrQuality === 'low' || ocrStatus === 'low_quality') {
+          this.progressText.textContent = 'Partially readable';
+          this.onOcrDone(d);
+          // Show warning banner for low-quality OCR
+          this.msg(
+            d.confidence_notes || 'The text was partially readable — some content may be missing or incorrect.',
+            'warn'
+          );
+          return;
+        }
+        
         this.progressText.textContent = 'Translating text…';
         this.onOcrDone(d);
       } else if (d.status === 'failed') {
         this.stopPoll();
-        // Try to show backend error detail if available
+        // Show backend error detail with actionable guidance
         const failMsg = d.explanation || d.confidence_notes || 'Unable to read text from this image. Try a clearer photo.';
         this.msg(failMsg, 'err');
-        this.reset();
+        this.renderFailedState(d);
       } else {
         // Show phase-specific progress using ocr_status field
         const phase = d.ocr_status;
         if (phase === 'loading_image') {
           this.progressText.textContent = 'Loading image…';
         } else if (phase === 'ocr_processing') {
-          this.progressText.textContent = 'Reading text from image…';
+          this.progressText.textContent = 'Reading text…';
         } else if (phase === 'analyzing') {
           this.progressText.textContent = 'Analyzing document…';
         } else {
           this.progressText.textContent = 'Processing…';
         }
+        // Schedule next poll
+        this.continuePolling();
       }
     } catch(e) {
       console.warn('Poll network error (will retry):', e.message);
-      // Don't stop or show error — transient network blips are common
+      // Still schedule next poll — transient network blips shouldn't kill the flow
+      this.continuePolling();
     }
+  }
+  
+  renderNoTextState(d) {
+    // Show the retake card immediately instead of translating garbage
+    this.retakeCard.classList.remove('hidden');
+    document.getElementById('translationCard').classList.add('hidden');
+    document.getElementById('explanationCard').classList.add('hidden');
+    if (d.retake_tips) this.renderTips(d.retake_tips);
+  }
+  
+  renderFailedState(d) {
+    // Show actionable failure with retake guidance
+    this.retakeCard.classList.remove('hidden');
+    if (d.retake_tips) this.renderTips(d.retake_tips);
   }
 
   async onOcrDone(doc) {
@@ -313,7 +359,26 @@ class DocTranslateApp {
   renderAll(doc) {
     this.renderSummary(doc);
 
-    const bad = doc.translation_skipped === true || doc.ocr_status === 'low_quality' || doc.ocr_status === 'no_text';
+    // Check OCR quality for smart UI state
+    const noText = doc.ocr_quality === 'none' || doc.ocr_status === 'no_text';
+    const lowQuality = doc.ocr_quality === 'low' || doc.ocr_status === 'low_quality';
+    const skipped = doc.translation_skipped === true;
+    
+    // Add quality warning banner for low-confidence reads
+    const qualityBanner = document.getElementById('qualityWarning');
+    if (qualityBanner) {
+      if (lowQuality) {
+        qualityBanner.classList.remove('hidden');
+        qualityBanner.textContent = '⚠ Partially readable — some content may be missing or incorrect. Check the original photo if something looks off.';
+      } else if (noText) {
+        qualityBanner.classList.remove('hidden');
+        qualityBanner.textContent = '⚠ Could not read text from this photo. Try retaking with better lighting.';
+      } else {
+        qualityBanner.classList.add('hidden');
+      }
+    }
+
+    const bad = skipped || lowQuality || noText;
     this.retakeCard.classList.toggle('hidden', !bad);
     document.getElementById('translationCard').classList.toggle('hidden', bad);
     document.getElementById('explanationCard').classList.toggle('hidden', bad);

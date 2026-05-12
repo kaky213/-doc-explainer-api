@@ -1,0 +1,13 @@
+.venv/
+data/
+__pycache__/
+.pytest_cache/
+*.bak
+*.log
+*.pid
+tests/
+test_*.py
+test_*.js
+.env
+app.py.backup*
+app.py.*.bak
