@@ -63,7 +63,7 @@ def test_health_endpoint(client):
     assert data["status"] == "healthy"
     assert "config" in data
     assert data["config"]["deepseek"] in ("enabled", "disabled")
-    assert data["config"]["admin_key"] in ("set", "default")
+    assert "admin_key" not in data["config"], "Health endpoint should not leak admin key status"
     assert data["config"]["ocr"] in ("available", "unavailable")
 
 

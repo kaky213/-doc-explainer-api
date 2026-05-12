@@ -25,8 +25,6 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-import uuid
-
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Header, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,8 +32,8 @@ from starlette.responses import Response
 from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from datetime import datetime, timedelta
+from datetime import datetime
+import hmac
 
 load_dotenv()
 
@@ -43,8 +41,11 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s UTC %(levelname)-7s %(name)s %(message)s')
 logger = logging.getLogger(__name__)
 
-# Debug flag for verbose OCR logging
-DEBUG_OCR = True
+# Debug flag for verbose OCR logging.
+# Set to False for production/deployed environments.
+# When enabled, logs OCR preprocessing, early-exit decisions, and scoring details.
+# Does NOT leak raw document text.
+DEBUG_OCR = os.getenv("DEBUG_OCR", "false").lower() in ("true", "1", "yes")
 
 # Try to import OCR dependencies (optional)
 try:
@@ -105,37 +106,6 @@ def ocr_quality_from_score(score: float, conf: float, text: str = "") -> str:
 
     # Everything else - too little or too noisy
     return "low"
-
-
-def rotate_image_cv(img, angle: float):
-    if angle % 360 == 0:
-        return img
-    if len(img.shape) == 2:
-        h, w = img.shape
-    else:
-        h, w = img.shape[:2]
-    center = (w // 2, h // 2)
-    M = cv2.getRotationMatrix2D(center, angle, 1.0)
-    rotated = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-    return rotated
-
-
-def get_osd_rotation(pil_image):
-    try:
-        osd = pytesseract.image_to_osd(
-            pil_image,
-            lang="osd",
-            config="--psm 0",
-            output_type=pytesseract.Output.DICT,
-        )
-        angle = float(osd.get("rotate", 0))
-        if angle > 180:
-            angle -= 360
-        if abs(angle) < 1:
-            return 0.0
-        return angle
-    except Exception:
-        return 0.0
 
 
 def score_ocr_text(text: str) -> float:
@@ -332,7 +302,7 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
                 info["deskew_rotation"] = angle
                 return result_img, updates
     except Exception:
-        pass  # OSD may fail on small/noisy images
+        logger.debug("OSD failed on small/noisy image, continuing")
 
     # Strategy 2: EXIF orientation (phone cameras often embed this)
     # This is typically handled by PIL.open() automatically, but we try
@@ -343,7 +313,7 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
         # already consumed on Image.open(). We note this and move on.
         pass
     except Exception:
-        pass
+        logger.debug("EXIF orientation extraction failed, continuing")
 
     # Strategy 3: Histogram-based orientation detection
     # For images with text, text lines create horizontal gradients.
@@ -366,7 +336,7 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
             info["deskew_rotation"] = 90
             return result_img, updates
     except Exception:
-        pass
+        logger.debug("Histogram orientation detection failed, continuing")
 
     return gray if img_array.ndim != 3 else img_array, updates
 
@@ -1098,12 +1068,6 @@ def load_documents() -> List[Document]:
     return list(_document_store.values())
 
 
-def save_documents(documents: List[Document]):
-    """Replace the in-memory store with a new document list"""
-    global _document_store
-    _document_store = {doc.id: doc for doc in documents}
-
-
 def get_document_by_id(doc_id: str) -> Optional[Document]:
     """Get a document by ID from in-memory store"""
     return _document_store.get(doc_id)
@@ -1520,7 +1484,6 @@ async def health_check(request: Request):
         "status": "healthy",
         "config": {
             "deepseek": "enabled" if os.getenv("DEEPSEEK_API_KEY") else "disabled",
-            "admin_key": "set" if os.getenv("DEMO_ADMIN_KEY") and os.getenv("DEMO_ADMIN_KEY") != "change-me-in-production" else "default",
             "ocr": "available" if OCR_AVAILABLE else "unavailable",
         },
         "upload": {
@@ -1530,11 +1493,13 @@ async def health_check(request: Request):
 }
 
 
-# Allowed file extensions and corresponding MIME types
+# Allowed file extensions and MIME types
+# These override config.py defaults for the API layer.
 ALLOWED_EXTENSIONS = {'.txt', '.png', '.jpg', '.jpeg'}
 ALLOWED_IMAGE_MIMES = {'image/png', 'image/jpeg'}
-MAX_IMAGE_BYTES = 10 * 1024 * 1024
-MAX_TEXT_BYTES = 5 * 1024 * 1024
+# Upload size limits (intentionally smaller than config.py defaults for demo)
+MAX_IMAGE_BYTES = 10 * 1024 * 1024   # 10 MB (config.py: 20 MB)
+MAX_TEXT_BYTES = 5 * 1024 * 1024     # 5 MB (config.py: 500 KB)
 
 
 @app.post("/documents/upload", response_model=DocumentResponse)
@@ -1647,7 +1612,8 @@ async def upload_document(
 @app.get("/documents", response_model=List[DocumentResponse])
 async def list_documents(x_admin_key: str = Header(None)):
     """List all uploaded documents (admin only - requires X-Admin-Key header)"""
-    if x_admin_key != DEMO_ADMIN_KEY:
+    # Constant-time comparison for admin key to resist timing attacks
+    if not hmac.compare_digest(x_admin_key or "", DEMO_ADMIN_KEY):
         logger.warning("List-documents attempt without valid admin key")
         raise HTTPException(status_code=403, detail="Not authorized")
     documents = load_documents()
@@ -1670,16 +1636,9 @@ MYMEMORY_EMAIL = os.getenv("MYMEMORY_EMAIL")
 
 
 
-def normalize_lang_code(lang: str | None) -> str:
-    """
-    Normalize various language code formats to MyMemory/DeepSeek-compatible codes.
-    Delegates to lang_detect module for comprehensive mapping.
-    """
-    return ld.normalize_lang_code(lang)
-
 async def translate_with_mymemory(text: str, source_lang: str, target_lang: str) -> str | None:
-    source_lang = normalize_lang_code(source_lang)
-    target_lang = normalize_lang_code(target_lang)
+    source_lang = ld.normalize_lang_code(source_lang)
+    target_lang = ld.normalize_lang_code(target_lang)
 
     if not source_lang or source_lang in {"unknown", "und", "none", "auto"}:
         return None
@@ -2217,7 +2176,7 @@ Follow all rules strictly. Return ONLY the JSON object."""
                 f"source=heuristic"
             )
         except Exception:
-            logger.info("Analysis fallback: language detection also failed")
+            logger.debug("Analysis fallback: language detection also failed")
         return {
             "document_type": "unknown_document",
             "document_type_confidence": "low",
@@ -2474,8 +2433,8 @@ async def translate_document(document_id: str, request: TranslationRequest):
             deepseek_start = time.time()
             translated_text = await translate_with_deepseek(
                 doc.extracted_text,
-                normalize_lang_code(source_lang) if source_lang != "auto" else "unknown",
-                normalize_lang_code(target_lang)
+                ld.normalize_lang_code(source_lang) if source_lang != "auto" else "unknown",
+                ld.normalize_lang_code(target_lang)
             )
             deepseek_time = (time.time() - deepseek_start) * 1000
         except Exception as e:

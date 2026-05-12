@@ -8,9 +8,11 @@ Importing this module should have no side effects beyond defining constants.
 from pathlib import Path
 
 # File upload limits
+# These are the maximum theoretical values.
+# The API layer (app.py) may enforce stricter limits for the demo.
 ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.txt'}
-MAX_IMAGE_BYTES = 20 * 1024 * 1024  # 20 MB
-MAX_TEXT_BYTES = 500 * 1024  # 500 KB for .txt files
+MAX_IMAGE_BYTES = 20 * 1024 * 1024  # 20 MB (app.py: 10 MB for demo)
+MAX_TEXT_BYTES = 5 * 1024 * 1024    # 5 MB for .txt files (matches app.py)
 
 # OCR Configuration
 # All Tesseract languages to load. This constant is used for availability checks.
