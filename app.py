@@ -1059,6 +1059,10 @@ def ensure_directories():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
+# Maximum uploaded files to keep on disk before cleanup
+MAX_UPLOADED_FILES = 500
+
+
 # In-memory document store - avoids disk I/O on every status update
 # Documents are stored as Document objects keyed by document_id.
 # This is stateless across restarts (appropriate for demo/deployment).
@@ -1071,7 +1075,14 @@ def load_documents() -> List[Document]:
 
 
 def get_document_by_id(doc_id: str) -> Optional[Document]:
-    """Get a document by ID from in-memory store"""
+    """Get a document by ID from in-memory store.
+    Validates doc_id format to prevent key injection / path traversal.
+    """
+    if not doc_id or not isinstance(doc_id, str):
+        return None
+    # Reject any doc_id with path traversal or control characters
+    if ".." in doc_id or "/" in doc_id or "\\" in doc_id:
+        return None
     return _document_store.get(doc_id)
 
 
@@ -1135,17 +1146,52 @@ def validate_file_magic(file: UploadFile, file_ext: str) -> bool:
         return False
 
 
+def cleanup_old_files():
+    """Remove oldest uploaded files when count exceeds MAX_UPLOADED_FILES.
+    Prevents disk space exhaustion in long-running demo deployments.
+    """
+    try:
+        all_files = [os.path.join(UPLOADS_DIR, f) for f in os.listdir(UPLOADS_DIR)]
+        all_files = [f for f in all_files if os.path.isfile(f)]
+        if len(all_files) <= MAX_UPLOADED_FILES:
+            return
+        # Sort by modification time, oldest first
+        all_files.sort(key=os.path.getmtime)
+        excess = len(all_files) - MAX_UPLOADED_FILES
+        for f in all_files[:excess]:
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+        logger.debug(f"Cleaned up {excess} old uploaded files (total={len(all_files)})")
+    except Exception as e:
+        logger.debug(f"Upload cleanup skipped: {e}")
+
+
 def save_uploaded_file(file: UploadFile) -> str:
-    """Save uploaded file to disk and return stored path"""
+    """Save uploaded file to disk and return stored path.
+    Uses safe UUID-based filenames to prevent path traversal.
+    """
     ensure_directories()
 
     file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
+    # Strip any path separator characters from extension to prevent traversal
+    file_ext = file_ext.replace("/", "").replace("\\", "")
     unique_filename = f"{uuid.uuid4()}{file_ext}"
     stored_path = os.path.join(UPLOADS_DIR, unique_filename)
+
+    # Validate the final path is within UPLOADS_DIR (defense in depth)
+    real_uploads = os.path.realpath(UPLOADS_DIR)
+    real_stored = os.path.realpath(stored_path)
+    if not real_stored.startswith(real_uploads + os.sep):
+        raise RuntimeError(f"Path traversal detected: {stored_path} is outside {UPLOADS_DIR}")
 
     with open(stored_path, "wb") as buffer:
         for chunk in iter(lambda: file.file.read(1024 * 1024), b""):
             buffer.write(chunk)
+
+    # Cleanup old files on every upload (cheap listdir, rare delete churn)
+    cleanup_old_files()
 
     return stored_path
 
