@@ -92,3 +92,68 @@
 - **MyMemory+DeepSeek combo**: For Latin translations, MyMemory works fine.
   For CJK etc, goes direct to DeepSeek (requires DEEPSEEK_API_KEY env var).
   Could try combining: MyMemory for phrase-level, DeepSeek for polishing.
+
+### ✅ Items 5-12 Completion Status (2026-05-11)
+
+All items from the multilingual plan are now implemented, tested, and documented.
+
+**5. Translation pipeline for major languages** ✅
+- 14 priority languages supported (7 Latin + 1 Cyrillic + 1 Arabic + 1 Devanagari + 4 CJK)
+- Centralized mappings in `config.py`: `SUPPORTED_TARGET_LANGUAGES`, `SUPPORTED_SOURCE_LANGUAGES`,
+  `ISO_TO_TESSERACT`, `TESSERACT_TO_ISO`, `MYMEMORY_WEAK_LANGS`, `LANG_SCRIPT_GROUPS`
+- Translation routing: MyMemory first for Latin, skip for CJK/Arabic/Devanagari → direct to DeepSeek
+- Code normalization: `normalize_lang_code()` handles ISO↔BCP47↔human names, `normalize_to_tesseract()`
+- Frontend: 14-language dropdown with script-grouped optgroups, source language selector with Auto-detect
+
+**6. Mixed-language document handling** ✅
+- OCR tolerates mixed-script text via Tier 2 script-aware fallback
+- Script detection reports `is_mixed: true` with per-script percentages
+- Test fixtures for mixed Latin (`mixed_latin_doc`), CJK+Latin (`mixed_cjk_latin_doc`),
+  Arabic+English (`mixed_arabic_english_doc`)
+- Pipeline tests verify end-to-end: image generation → OCR → script detection → language detection
+
+**7. Analysis/explanation fallback** ✅
+- `analyze_document_content` exception handler now detects language/script from OCR text
+- Logs metadata (detected_script, detected_lang, source=heuristic) without leaking document text
+- Graceful fallback message regardless of source language (no nonsense for non-English)
+- All languages fall through uniformly
+
+**8. Multilingual test coverage** ✅
+- `tests/test_multilingual.py`: 59 tests across 4 test classes
+- `TestLangDetection`: 16 tests — all 14 languages + empty/short/numeric text
+- `TestScriptDetection`: 10 tests — all 7 scripts + mixed pairs + empty
+- `TestOcrMultilingual`: 14 tests — OCR with appropriate language pack per fixture
+- `TestFullMultilingualPipeline`: 12 tests — end-to-end image→OCR→detection
+- `TestMultilingualFallbackBehavior`: 7 tests — edge cases, normalization mappings
+- All fixtures in `tests/test_fixtures/generate_fixtures.py` — programmatic, no committed binaries
+
+**9. Observability for multilingual behavior** ✅
+- OCR Tier 2/3 transition logs: `best_score`, `script`, `is_mixed`, tier language sets
+- Analysis fallback logs: `detected_script`, `detected_lang`, `source=heuristic`
+- Translation timing logs: `detected_lang`, `ocr_conf`, `ocr_quality`
+- No document text leaked in any log line
+
+**10. Performance (staged OCR strategy)** ✅
+- Tier 1: English-only fast path with early exit at high-confidence
+- Tier 2: Script-aware fallback — only for low-quality Tier 1 results
+- Tier 3: General Latin combos — only when Tier 1/2 both fail
+- Never tries all language packs on every image
+- Bounded retries: 6 image variants × 1 lang (Tier 1), not 6 × 14
+- Render-friendly: no heavy infra, no extra services
+
+**11. Documentation** ✅
+- README: Fully updated with multilingual support table, OCR strategy, language detection,
+  translation pipeline section, mixed-language handling, adding languages guide, config file overview
+- Dockerfile: All 15 language packs installed with comments by script group
+- `.env.example`: Clear comments for each variable
+- `OVERNIGHT_NOTES.md`: This completion summary
+
+**12. Success criteria** ✅
+- ✅ Clear list of 14 supported languages (documented in README, config.py, frontend)
+- ✅ Improved OCR/translation across 5 script groups (Latin, Cyrillic, Arabic, Devanagari, CJK)
+- ✅ Multilingual fallback (graceful message regardless of source language)
+- ✅ 59 multilingual tests + 46 existing tests = 105 total, all passing
+- ✅ No regression for English/Spanish (original 46 tests pass)
+- ✅ No hangs — bounded OCR retries, timeout-aware pipeline
+
+**Total test count: 105 tests, 0 failures**
