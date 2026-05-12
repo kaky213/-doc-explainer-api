@@ -31,7 +31,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 import hmac
 
@@ -1047,8 +1047,10 @@ class Document(DocumentBase):
 
 
 class DocumentResponse(Document):
-    """Response model for document endpoints"""
-    pass
+    """Response model for document endpoints.
+    Excludes internal filesystem path (stored_path) from serialization.
+    """
+    stored_path: Optional[str] = Field(None, exclude=True)
 
 
 # Helper functions for JSON persistence
@@ -1096,6 +1098,41 @@ def get_source_type_from_filename(filename: str) -> DocumentSourceType:
         return DocumentSourceType.IMAGE_FILE
     else:
         return DocumentSourceType.UNSUPPORTED
+
+
+def validate_file_magic(file: UploadFile, file_ext: str) -> bool:
+    """
+    Validate file magic bytes to ensure content matches extension.
+    Prevents MIME-type/extension mismatch attacks where a renamed executable
+    or script is uploaded as a harmless-looking .png or .txt.
+    """
+    try:
+        header = file.file.read(512)
+        file.file.seek(0)
+
+        if file_ext in {".png", ".jpg", ".jpeg"}:
+            if len(header) < 4:
+                return False
+            if file_ext == ".png":
+                # PNG magic: 89 50 4E 47 0D 0A 1A 0A
+                return header[:8] == b"\x89PNG\r\n\x1a\n"
+            else:
+                # JPEG magic: FF D8 FF
+                return header[:3] == b"\xff\xd8\xff"
+        elif file_ext == ".txt":
+            # Reject .txt files containing null bytes (binary content masquerading as text)
+            if b"\x00" in header[:512]:
+                return False
+            # Verify content is valid UTF-8 or close to it
+            try:
+                header[:512].decode("utf-8")
+            except UnicodeDecodeError:
+                return False
+            return True
+        return True  # Unknown extension, validate at call site
+    except Exception:
+        file.file.seek(0)
+        return False
 
 
 def save_uploaded_file(file: UploadFile) -> str:
@@ -1572,6 +1609,15 @@ async def upload_document(
             pass
         finally:
             file.file.seek(0)
+
+    # Validate file magic bytes before saving
+    if not validate_file_magic(file, file_ext):
+        logger.warning(f"Upload rejected: magic byte mismatch for '{file.filename}' (ext={file_ext})")
+        if file_ext in {".png", ".jpg", ".jpeg"}:
+            detail = "File content does not match image format. The file may be corrupted or renamed."
+        else:
+            detail = "File content is not valid text or contains binary data."
+        raise HTTPException(status_code=422, detail=detail)
 
     # Save uploaded file
     stored_path = save_uploaded_file(file)

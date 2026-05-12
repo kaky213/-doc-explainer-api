@@ -85,12 +85,13 @@ def test_upload_document(client):
     assert "id" in result
     assert result["filename"] == "test.txt"
     assert result["content_type"] == "text/plain"
-    assert "stored_path" in result
+    assert "stored_path" not in result, "stored_path should be excluded from API responses"
+    assert result["extracted_text"] is None
     assert result["source_type"] == "text_file"
     assert result["status"] == DocumentStatus.UPLOADED.value
     assert "created_at" in result
     assert result["detected_language"] is None
-    assert result["extracted_text"] is None
+    assert result["translated_text"] is None
     assert result["translated_text"] is None
     assert result["explanation"] is None
     assert "disclaimer" in result
@@ -135,6 +136,16 @@ def _create_real_png_bytes() -> bytes:
     img = PILImage.new('RGB', (100, 50), color=(200, 200, 200))
     buf = io.BytesIO()
     img.save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def _create_real_jpeg_bytes() -> bytes:
+    """Create a real tiny JPEG image in memory for tests."""
+    import io
+    from PIL import Image as PILImage
+    img = PILImage.new('RGB', (100, 50), color=(200, 200, 200))
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG')
     return buf.getvalue()
 
 
@@ -383,21 +394,24 @@ def test_document_structure_integrity(client):
     response = client.post("/documents/upload", files={"file": test_file})
     document = response.json()
     
-    # Check all required fields are present
+    # Check all required fields are present in the API response
+    # Note: stored_path is excluded from API responses (internal filesystem path)
     required_fields = [
-        "id", "filename", "content_type", "stored_path", "source_type", "status",
+        "id", "filename", "content_type", "source_type", "status",
         "created_at", "detected_language", "target_language", "extracted_text", 
         "translated_text", "explanation", "disclaimer"
     ]
     
     for field in required_fields:
-        assert field in document
+        assert field in document, f"Required field '{field}' missing from response"
+    
+    # Verify stored_path is NOT exposed in API responses
+    assert "stored_path" not in document, "stored_path must not be exposed in API responses"
     
     # Check field types
     assert isinstance(document["id"], str)
     assert isinstance(document["filename"], str)
     assert isinstance(document["content_type"], str)
-    assert isinstance(document["stored_path"], str)
     assert isinstance(document["source_type"], str)
     assert isinstance(document["status"], str)
     assert isinstance(document["created_at"], str)
@@ -407,7 +421,7 @@ def test_document_structure_integrity(client):
     assert document["translated_text"] is None or isinstance(document["translated_text"], str)
     assert document["explanation"] is None or isinstance(document["explanation"], str)
     assert isinstance(document["disclaimer"], str)
-    
+
     # Check status is valid
     assert document["status"] in ["uploaded", "processing", "completed", "failed"]
 
@@ -419,9 +433,13 @@ def test_uploaded_file_persisted(client):
     
     response = client.post("/documents/upload", files={"file": test_file})
     document = response.json()
+    doc_id = document["id"]
     
-    # Check file was saved
-    stored_path = document["stored_path"]
+    # Verify file was saved using internal store (stored_path is excluded from API responses)
+    from app import _document_store
+    assert doc_id in _document_store
+    stored_path = _document_store[doc_id].stored_path
+    assert stored_path, "stored_path should be set in internal model"
     assert os.path.exists(stored_path)
     
     # Verify file content
@@ -450,8 +468,8 @@ def test_document_source_type_detection(client, monkeypatch):
     test_cases = [
         ("document.txt", b"Text content", "text/plain", "text_file"),
         ("image.png", _create_real_png_bytes(), "image/png", "image_file"),
-        ("photo.jpg", _create_real_png_bytes(), "image/jpeg", "image_file"),
-        ("picture.jpeg", _create_real_png_bytes(), "image/jpeg", "image_file"),
+        ("photo.jpg", _create_real_jpeg_bytes(), "image/jpeg", "image_file"),
+        ("picture.jpeg", _create_real_jpeg_bytes(), "image/jpeg", "image_file"),
     ]
     
     for filename, content, content_type, expected_source_type in test_cases:

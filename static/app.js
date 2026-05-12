@@ -540,7 +540,11 @@ class DocTranslateApp {
   }
 
   fmt(t) {
-    return t.replace(/\n/g,'<br>')
+    if (!t) return '';
+    // Escape HTML entities first to prevent XSS from any content in translated text or explanations
+    let s = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    // Then convert markdown-style formatting to safe HTML
+    return s.replace(/\n/g,'<br>')
             .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
             .replace(/\*(.+?)\*/g,'<em>$1</em>');
   }
