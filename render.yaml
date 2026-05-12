@@ -9,8 +9,6 @@ services:
     region: oregon
     plan: free
     envVars:
-      - key: ADMIN_KEY
-        value: change-me-in-production
       - key: DEMO_ADMIN_KEY
         value: change-me-in-production
       - key: PORT
