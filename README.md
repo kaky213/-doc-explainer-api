@@ -48,20 +48,99 @@ Perfect for:
 **OCR Requirements:**
 - **Python packages:** pytesseract, Pillow (included in requirements.txt)
 - **System dependency:** Tesseract OCR engine with language packs (see installation instructions above)
-- **Supported languages:** English (eng), Spanish (spa), French (fra), German (deu), Portuguese (por), Italian (ita), Chinese Simplified (chi_sim)
+- **15 Tesseract language packs required:** eng, spa, por, fra, deu, ita, nld (Latin); rus (Cyrillic); ara (Arabic); hin (Devanagari); chi_sim, chi_tra, jpn, kor (CJK)
 - **OCR quality depends on installed language data** - install all language packs for best results
 
-**Not yet implemented (planned for next steps):**
-- PDF OCR support
-- Language detection and translation
-- Intelligent plain-language explanations
-- Multi-page document support
+## 🌐 Multilingual Support
 
-**Out of scope for V1:**
-- Live camera document capture
-- Real-time processing
-- Legal advice or interpretation
-- Document editing or modification
+### Supported Languages (14 priority languages)
+
+The app fully supports 14 major languages across 5 script groups:
+
+| Script Group | Languages | Tesseract Pack | OCR Tier 1 | MyMemory | DeepSeek |
+|---|---|---|---|---|---|
+| **Latin** | English, Spanish, Portuguese, French, German, Italian, Dutch | eng, spa, por, fra, deu, ita, nld | ✅ English-first | ✅ | ✅ |
+| **Cyrillic** | Russian | rus | ⚡ Eng-first, falls back to rus | ✅ | ✅ |
+| **Arabic** | Arabic | ara | ⚡ Eng-first, falls back to ara | ⛔ Skipped* | ✅ |
+| **Devanagari** | Hindi | hin | ⚡ Eng-first, falls back to hin | ⛔ Skipped* | ✅ |
+| **CJK** | Chinese (Simplified/Traditional), Japanese, Korean | chi_sim, chi_tra, jpn, kor | ⚡ Eng-first, falls back to script-specific | ⛔ Skipped* | ✅ |
+
+\* MyMemory free tier is weak on non-Latin scripts. These languages skip directly to DeepSeek for better quality.
+
+### OCR Strategy (Staged, Performance-Aware)
+
+To minimize unnecessary calls while still supporting all languages:
+
+**Tier 1 — English-only fast path**
+- Tries 6 image variants with `eng` language pack on each
+- High-confidence exit when score ≥ 80 and confidence ≥ 85%
+- Covers the ~95% of documents that are English or Latin-script
+
+**Tier 2 — Script-aware fallback**
+- If Tier 1 returns low quality (score < 15), detects script from partial text
+- Picks appropriate language packs by script:
+  - Cyrillic → `rus`, `rus+ukr`, `eng+rus`
+  - Arabic → `ara`, `ara+eng`
+  - Devanagari → `hin`, `hin+eng`
+  - Han (Chinese) → `chi_sim`, `chi_tra`, `chi_sim+eng`
+  - Kana (Japanese) → `jpn`, `jpn+eng`
+  - Hangul (Korean) → `kor`, `kor+eng`
+
+**Tier 3 — General Latin fallback**
+- 7 multi-language combos: `eng+spa`, `eng+fra`, `eng+deu`, `eng+por`, `eng+spa+fra`, `eng+ita`, `eng+nld`
+- Used only when both Tier 1 and Tier 2 fail
+
+### Language Detection
+
+- **Script detection**: Unicode range analysis (no external library needed)
+  - Detects Latin, Cyrillic, Arabic, Devanagari, Han, Kana, Hangul
+  - Returns dominant script + percentage breakdown + mixed-script detection
+- **Language detection**: Script-aware routing
+  - Non-Latin scripts map directly to the appropriate language
+  - Latin script uses function word matching (2pt/word) + accented chars (3pt/char) across all 7 Latin languages
+  - CJK: kana presence differentiates Japanese vs Chinese
+- **Code normalization**: Bidirectional mapping between ISO 639-1, Tesseract 3-letter codes, and MyMemory codes
+
+### Translation Pipeline
+
+1. **MyMemory** (free) — tried first for Latin-script languages
+2. **DeepSeek** (requires API key) — tried if MyMemory fails or for non-Latin scripts
+3. **Best-effort fallback** — shows source text with language prefix when both fail
+   - Fallback now uses proper language detection instead of hardcoded word lists
+
+### Analysis/Explanation
+
+- **DeepSeek** (when API key configured): Analyzes document in any language, returns explanation in the target language
+- **Heuristic fallback** (no DeepSeek): Detects language/script from OCR text, returns generic message with language metadata in logs
+
+### Mixed-Language Document Handling
+
+- OCR tolerates mixed-script text (e.g., English + Arabic on the same page)
+- Script detection reports `is_mixed: true` with per-script percentages
+- Translation preserves original text segments where possible
+- No non-Latin text is discarded — all extracted text is available for translation
+
+### Adding a New Language
+
+1. Install the Tesseract language pack (`sudo apt-get install tesseract-ocr-<code>`)
+2. Add entries in `config.py`:
+   - `LANG_DISPLAY_NAMES`
+   - `LANG_SCRIPT_GROUPS` (assign to a script group)
+   - `SUPPORTED_TARGET_LANGUAGES` / `SUPPORTED_SOURCE_LANGUAGES`
+   - `ISO_TO_TESSERACT` / `TESSERACT_TO_ISO`
+   - `SCRIPT_OCR_STRATEGIES` if it uses a new script group
+   - `MYMEMORY_WEAK_LANGS` if MyMemory is weak for this language
+3. Add function words in `lang_detect.py` `_detect_latin_language()` (for new Latin languages)
+4. Update frontend `langName()` in `static/app.js`
+5. Add option in `static/index.html` dropdowns (grouped by script)
+6. Update Dockerfile with the new language pack
+7. Regenerate language fixtures in `tests/test_fixtures/generate_fixtures.py`
+
+### Configuration Files
+
+- **`config.py`**: Centralized constants for all language mappings, script groups, OCR strategies, and fallback lists
+- **`lang_detect.py`**: Script detection, language detection, code normalization — all in one module
+- **`OVERNIGHT_NOTES.md`**: Complete audit trail of English/Spanish bias removal and multilingual improvements
 
 ## 🚀 Quick Start
 
@@ -93,13 +172,25 @@ pip install -r requirements.txt
 sudo apt-get update
 # Install Tesseract with multi-language support
 sudo apt-get install -y tesseract-ocr \
+    # Latin script (7 languages)
     tesseract-ocr-eng \
     tesseract-ocr-spa \
+    tesseract-ocr-por \
     tesseract-ocr-fra \
     tesseract-ocr-deu \
-    tesseract-ocr-por \
     tesseract-ocr-ita \
-    tesseract-ocr-chi-sim
+    tesseract-ocr-nld \
+    # Cyrillic script
+    tesseract-ocr-rus \
+    # Arabic script
+    tesseract-ocr-ara \
+    # Devanagari script
+    tesseract-ocr-hin \
+    # CJK scripts (separate per language — never mixed)
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-chi-tra \
+    tesseract-ocr-jpn \
+    tesseract-ocr-kor
 
 # On macOS:
 brew install tesseract

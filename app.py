@@ -2206,7 +2206,21 @@ Follow all rules strictly. Return ONLY the JSON object."""
 
     except Exception as e:
         logger.error(f"Document analysis failed: {e}")
-        # Safe fallback
+        # Safe fallback — log language metadata without leaking document text
+        if not DEEPSEEK_API_KEY:
+            logger.info("Analysis fallback: DeepSeek not configured (expected on demo)")
+        try:
+            detected = ld.detect_language_from_ocr_text(extracted_text[:500])
+            lang_code = detected.get("lang")
+            script_code = detected.get("script")
+            logger.info(
+                f"Analysis fallback metadata: "
+                f"detected_script={script_code or 'none'} "
+                f"detected_lang={lang_code or 'unknown'} "
+                f"source=heuristic"
+            )
+        except Exception:
+            logger.info("Analysis fallback: language detection also failed")
         return {
             "document_type": "unknown_document",
             "document_type_confidence": "low",
@@ -2505,7 +2519,11 @@ async def translate_document(document_id: str, request: TranslationRequest):
     total_time = (time.time() - start_time) * 1000
     logger.info(f"Translation timing: doc {document_id} total={total_time:.0f} ms, "
                f"mymemory={mymemory_time:.0f} ms, deepseek={deepseek_time:.0f} ms, "
-               f"explanation={explanation_time:.0f} ms")
+               f"explanation={explanation_time:.0f} ms, "
+               f"lang={request.source_language_hint or 'auto'}->{request.target_language}, "
+               f"detected_lang={doc.detected_language or 'unknown'}, "
+               f"ocr_conf={doc.ocr_confidence or 0:.0f}%, "
+               f"quality={doc.ocr_quality or 'none'}")
 
     return get_document_by_id(document_id)
 

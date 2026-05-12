@@ -206,7 +206,10 @@ def _detect_latin_language(text: str, words: list, script_info: dict) -> dict:
     function_words = {
         "en": {"the", "and", "is", "in", "of", "to", "a", "for", "on", "this",
                "with", "are", "or", "be", "an", "that", "it", "as", "was", "he",
-               "have", "not", "but", "by", "from", "they", "has", "had", "been"},
+               "have", "not", "but", "by", "from", "they", "has", "had", "been",
+               "its", "we", "so", "no", "do", "at", "all", "if", "about", "up",
+               "out", "their", "what", "which", "some", "each", "can", "will",
+               "would", "could", "should", "may", "also", "just", "than", "then"},
         "es": {"de", "la", "el", "que", "en", "y", "a", "los", "se", "las",
                "por", "con", "para", "una", "del", "como", "más", "pero", "sus",
                "le", "ya", "este", "entre", "todo", "esa"},
@@ -277,8 +280,10 @@ def _detect_latin_language(text: str, words: list, script_info: dict) -> dict:
         return {"lang": None, "confidence": 0.0, "script": "latin"}
 
     detected = max(scores, key=scores.get)
-    # Convert confidence to 0-1 scale: max_score / 40 (cap at 1.0)
-    confidence = min(max_score / 40.0, 1.0)
+    # Convert confidence to 0-1 scale: max_score / 24 (cap at 0.95)
+    # 24 = ~12 function word matches at 2 pts each, realistic for ~40-50 word OCR text.
+    # Lower divisor gives better confidence resolution for shorter texts.
+    confidence = min(max_score / 24.0, 0.95)
     return {"lang": detected, "confidence": confidence, "script": "latin"}
 
 
