@@ -837,26 +837,68 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
                 _variant_had_text.add(variant_name)
             _update_best(result, variant_name, "eng", psm)
 
-    # Tier 2 (fallback): multi-lang only if English produced no usable text
-    # Try progressively broader language combinations
-    fallback_langs = ["eng+spa", "eng+fra", "eng+deu", "eng+por", "eng+spa+fra", "eng+ita"]
+    # Tier 2: Script-aware fallback - detect script from image content
+    # and use appropriate language packs before trying general combos.
     if not best["text"] or best["score"] < 15:
-        for variant_name, variant_img in variants.items():
+        # Detect script from the best text we have (even if partial)
+        best_text_for_script = best.get("text", "") or ""
+        script_info = ld.detect_script_from_text(best_text_for_script)
+        dominant_script = script_info.get("dominant")
+
+        # Build script-specific fallback language list
+        script_langs = []
+        if dominant_script == "cyrillic":
+            script_langs = ["rus", "rus+ukr", "eng+rus"]
+        elif dominant_script == "arabic":
+            script_langs = ["ara", "ara+eng"]
+        elif dominant_script == "devanagari":
+            script_langs = ["hin", "hin+eng"]
+        elif dominant_script == "han":
+            # Check for kana presence to differentiate Japanese vs Chinese
+            kana_pct = script_info.get("scripts", {}).get("kana", 0.0)
+            if kana_pct > 0.05:
+                script_langs = ["jpn", "jpn+eng", "chi_sim"]
+            else:
+                script_langs = ["chi_sim", "chi_tra", "chi_sim+eng"]
+        elif dominant_script == "kana":
+            script_langs = ["jpn", "jpn+eng", "chi_sim"]
+        elif dominant_script == "hangul":
+            script_langs = ["kor", "kor+eng"]
+
+        for flang in script_langs:
             _check_deadline()
             if high_confidence_found:
                 break
-            # For variants where eng found text: skip - eng already explored this variant
-            if variant_name in _variant_had_text:
-                continue
-            for flang in fallback_langs:
+            for variant_name, variant_img in variants.items():
                 _check_deadline()
                 if high_confidence_found:
                     break
+                if variant_name in _variant_had_text:
+                    continue
                 result = _ocr_variant(variant_img, flang, 6)
                 if result is not None:
                     _update_best(result, variant_name, flang, 6)
-                    if result["score"] > 20:  # good enough - stop trying more langs
+                    if result["score"] > 15:
                         break
+
+        # Tier 3: General fallback if script-specific didn't yield good results
+        if (not best["text"] or best["score"] < 10) and not high_confidence_found:
+            fallback_langs = ["eng+spa", "eng+fra", "eng+deu", "eng+por", "eng+spa+fra", "eng+ita", "eng+nld"]
+            for variant_name, variant_img in variants.items():
+                _check_deadline()
+                if high_confidence_found:
+                    break
+                if variant_name in _variant_had_text:
+                    continue
+                for flang in fallback_langs:
+                    _check_deadline()
+                    if high_confidence_found:
+                        break
+                    result = _ocr_variant(variant_img, flang, 6)
+                    if result is not None:
+                        _update_best(result, variant_name, flang, 6)
+                        if result["score"] > 20:
+                            break
 
     detected_language = "unknown"
     if best["lang"] != "unknown":
@@ -2281,17 +2323,16 @@ async def translate_document(document_id: str, request: TranslationRequest):
         # Mark as partial quality in confidence notes
         if doc.ocr_quality == "low" or doc.ocr_status in ("low_quality", "low_quality_partial", "good", None) or bg_task_stale:
             new_lang = doc.detected_language
-            # Try to detect language from text if ocr detected 'eng' but text is clearly French/Italian/Spanish
+            # Use proper language detection instead of hardcoded word lists
             if not new_lang or new_lang == "eng":
-                fr_words = ["oignon", "soupe", "boeuf", "confit", "canard", "crème", "brûlée", "escargot", "terrine", "chèvre"]
-                it_words = ["bruschetta", "carpaccio", "prosciutto", "carbonara", "risotto", "tiramisu", "lasagna", "fiorentina", "melanzane"]
-                es_words = ["feria", "cultura", "concursos", "folklorico", "inauguracion", "gratuita", "baile", "taller"]
-                if any(w in text.lower() for w in fr_words):
-                    new_lang = "fra"
-                elif any(w in text.lower() for w in it_words):
-                    new_lang = "ita"
-                elif any(w in text.lower() for w in es_words):
-                    new_lang = "spa"
+                detected = ld.detect_language_from_ocr_text(text)
+                if detected and detected.get("lang") and detected["lang"] != "en":
+                    # Convert ISO 639-1 to Tesseract-style 3-letter code
+                    tesseract_code = ld.normalize_to_tesseract(detected["lang"])
+                    if tesseract_code:
+                        new_lang = tesseract_code
+                    else:
+                        new_lang = detected["lang"]
             update_document(document_id, {
                 "ocr_status": "best_effort",
                 "detected_language": new_lang,
@@ -2387,9 +2428,17 @@ async def translate_document(document_id: str, request: TranslationRequest):
     translated_text = None
     explanation = None
 
-    # Try MyMemory translation first (free) - skip if source == target
-    # MyMemory returns 'PLEASE SELECT TWO DISTINCT LANGUAGES' which is useless
-    if source_lang != "auto" and source_lang != target_lang:
+    # Try MyMemory translation first (free) — skip if:
+    #   - source == target (returns useless error message)
+    #   - source is auto (MyMemory can't handle auto)
+    #   - target is a language MyMemory handles poorly (CJK, Arabic, Devanagari)
+    #     For these, go directly to DeepSeek for better quality
+    mymemory_should_skip = (
+        source_lang == "auto"
+        or source_lang == target_lang
+        or target_lang in cfg.MYMEMORY_WEAK_LANGS
+    )
+    if not mymemory_should_skip:
         mymemory_start = time.time()
         translated_text = await translate_with_mymemory(
             doc.extracted_text,
@@ -2397,6 +2446,8 @@ async def translate_document(document_id: str, request: TranslationRequest):
             target_lang
         )
         mymemory_time = (time.time() - mymemory_start) * 1000
+    else:
+        logger.info(f"Skipping MyMemory for {source_lang}->{target_lang} (direct to DeepSeek)")
 
     # If MyMemory failed or auto language, try DeepSeek
     if not translated_text:

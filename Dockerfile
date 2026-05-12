@@ -8,13 +8,26 @@ WORKDIR /app
 # Install system dependencies for OpenCV, Tesseract OCR, and XCB
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    # Latin script
     tesseract-ocr-eng \
+    tesseract-ocr-spa \
     tesseract-ocr-fra \
-    tesseract-ocr-ita \
     tesseract-ocr-deu \
     tesseract-ocr-por \
-    tesseract-ocr-spa \
+    tesseract-ocr-ita \
+    tesseract-ocr-nld \
+    # Cyrillic script
+    tesseract-ocr-rus \
+    # Arabic script
+    tesseract-ocr-ara \
+    # Devanagari script
+    tesseract-ocr-hin \
+    # CJK scripts
     tesseract-ocr-chi-sim \
+    tesseract-ocr-chi-tra \
+    tesseract-ocr-jpn \
+    tesseract-ocr-kor \
+    # System libs
     libgl1 \
     libglib2.0-0t64 \
     libxcb1 \

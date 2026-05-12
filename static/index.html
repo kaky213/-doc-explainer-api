@@ -67,16 +67,66 @@
                 </div>
 
                 <div class="lang-picker">
+                    <label class="lang-label">Document language</label>
+                    <div class="lang-select-wrap">
+                        <select class="lang-select" id="sourceLanguage">
+                            <option value="auto">🔍 Auto-detect</option>
+                            <optgroup label="Latin">
+                                <option value="en">English</option>
+                                <option value="es">Español</option>
+                                <option value="pt">Português</option>
+                                <option value="fr">Français</option>
+                                <option value="de">Deutsch</option>
+                                <option value="it">Italiano</option>
+                                <option value="nl">Nederlands</option>
+                            </optgroup>
+                            <optgroup label="Cyrillic">
+                                <option value="ru">Русский</option>
+                            </optgroup>
+                            <optgroup label="Arabic">
+                                <option value="ar">العربية</option>
+                            </optgroup>
+                            <optgroup label="Devanagari">
+                                <option value="hi">हिन्दी</option>
+                            </optgroup>
+                            <optgroup label="CJK">
+                                <option value="zh-CN">中文 (简体)</option>
+                                <option value="zh-TW">中文 (繁體)</option>
+                                <option value="ja">日本語</option>
+                                <option value="ko">한국어</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="lang-picker">
                     <label class="lang-label">Translate to</label>
                     <div class="lang-select-wrap">
                         <select class="lang-select" id="targetLanguage">
-                            <option value="en">English</option>
-                            <option value="es">Español</option>
-                            <option value="fr">Français</option>
-                            <option value="de">Deutsch</option>
-                            <option value="it">Italiano</option>
-                            <option value="pt">Português</option>
-                            <option value="zh-CN">中文</option>
+                            <optgroup label="Latin">
+                                <option value="en">English</option>
+                                <option value="es">Español</option>
+                                <option value="pt">Português</option>
+                                <option value="fr">Français</option>
+                                <option value="de">Deutsch</option>
+                                <option value="it">Italiano</option>
+                                <option value="nl">Nederlands</option>
+                            </optgroup>
+                            <optgroup label="Cyrillic">
+                                <option value="ru">Русский</option>
+                            </optgroup>
+                            <optgroup label="Arabic">
+                                <option value="ar">العربية</option>
+                            </optgroup>
+                            <optgroup label="Devanagari">
+                                <option value="hi">हिन्दी</option>
+                            </optgroup>
+                            <optgroup label="CJK">
+                                <option value="zh-CN">中文 (简体)</option>
+                                <option value="zh-TW">中文 (繁體)</option>
+                                <option value="ja">日本語</option>
+                                <option value="ko">한국어</option>
+                            </optgroup>
                         </select>
                     </div>
                 </div>
@@ -258,13 +308,30 @@
             <div class="retry-bar">
                 <div class="retry-select-wrap">
                     <select class="retry-select" id="retryTargetLanguage">
-                        <option value="en">English</option>
-                        <option value="es">Español</option>
-                        <option value="fr">Français</option>
-                        <option value="de">Deutsch</option>
-                        <option value="it">Italiano</option>
-                        <option value="pt">Português</option>
-                        <option value="zh-CN">中文</option>
+                        <optgroup label="Latin">
+                            <option value="en">English</option>
+                            <option value="es">Español</option>
+                            <option value="pt">Português</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                            <option value="it">Italiano</option>
+                            <option value="nl">Nederlands</option>
+                        </optgroup>
+                        <optgroup label="Cyrillic">
+                            <option value="ru">Русский</option>
+                        </optgroup>
+                        <optgroup label="Arabic">
+                            <option value="ar">العربية</option>
+                        </optgroup>
+                        <optgroup label="Devanagari">
+                            <option value="hi">हिन्दी</option>
+                        </optgroup>
+                        <optgroup label="CJK">
+                            <option value="zh-CN">中文 (简体)</option>
+                            <option value="zh-TW">中文 (繁體)</option>
+                            <option value="ja">日本語</option>
+                            <option value="ko">한국어</option>
+                        </optgroup>
                     </select>
                 </div>
                 <button class="btn-ghost btn-sm" id="retryTranslateBtn">

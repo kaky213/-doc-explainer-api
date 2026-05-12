@@ -74,6 +74,7 @@ class DocTranslateApp {
 
     this.targetLang.addEventListener('change', () => this.syncLangs());
     this.retryLang.addEventListener('change', () => this.syncLangs(true));
+    this.sourceLang.addEventListener('change', () => {});
 
     this.newBtn.addEventListener('click', () => this.reset());
     this.copyBtn.addEventListener('click', () => this.doCopy());
@@ -93,7 +94,13 @@ class DocTranslateApp {
   }
 
   langName(c) {
-    return {en:'English',es:'Español',fr:'Français',de:'Deutsch',it:'Italiano',pt:'Português','zh-CN':'中文'}[c]||c;
+    const names = {
+      en:'English',es:'Español',pt:'Português',fr:'Français',de:'Deutsch',
+      it:'Italiano',nl:'Nederlands',ru:'Русский',ar:'العربية',hi:'हिन्दी',
+      'zh-CN':'中文 (简体)','zh-TW':'中文 (繁體)',ja:'日本語',ko:'한국어',
+      auto:'Auto-detect'
+    };
+    return names[c] || c;
   }
 
   /* ========== FILE ========== */
@@ -329,11 +336,14 @@ class DocTranslateApp {
   async translate(doc) {
     try {
       const lang = this.targetLang.value;
+      const sourceHint = this.sourceLang.value !== 'auto' ? this.sourceLang.value : undefined;
       this.progressText.textContent = 'Translating to ' + this.langName(lang) + '…';
+      const body = {target_language:lang};
+      if (sourceHint) body.source_language_hint = sourceHint;
       const r = await fetch(`/documents/${doc.id}/translate`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({target_language:lang})
+        body:JSON.stringify(body)
       });
       if (!r.ok) throw new Error(`Translation failed (${r.status})`);
       const td = await r.json();
@@ -385,8 +395,19 @@ class DocTranslateApp {
 
     if (bad && doc.retake_tips) this.renderTips(doc.retake_tips);
 
-    this.sourceLang.textContent = doc.detected_language && doc.detected_language !== 'unknown'
-      ? (this.langName(doc.detected_language) || doc.detected_language) : 'Auto-detected';
+    const detectedCode = doc.detected_language && doc.detected_language !== 'unknown' ? doc.detected_language : null;
+    this.sourceLang.textContent = detectedCode
+      ? (this.langName(detectedCode) || detectedCode) : 'Auto-detected';
+    // Sync source selector to detected language if user hasn't manually overridden
+    if (detectedCode && this.sourceLang.value === 'auto') {
+      const codeMap = {'eng':'en','spa':'es','por':'pt','fra':'fr','deu':'de','ita':'it',
+                       'nld':'nl','rus':'ru','ara':'ar','hin':'hi','chi_sim':'zh-CN',
+                       'chi_tra':'zh-TW','jpn':'ja','kor':'ko'};
+      const isoCode = codeMap[detectedCode] || detectedCode;
+      if ([...this.sourceLang.options].some(o => o.value === isoCode)) {
+        this.sourceLang.value = isoCode;
+      }
+    }
 
     if (doc.translated_text) {
       this.transBox.innerHTML = this.fmt(doc.translated_text);
@@ -548,10 +569,13 @@ class DocTranslateApp {
     try {
       this.msg('Re-translating…', 'info');
       const lang = this.retryLang.value;
+      const sourceHint = this.sourceLang.value !== 'auto' ? this.sourceLang.value : undefined;
+      const body = {target_language:lang};
+      if (sourceHint) body.source_language_hint = sourceHint;
       const r = await fetch(`/documents/${this.currentDocumentId}/translate`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({target_language:lang})
+        body:JSON.stringify(body)
       });
       if (!r.ok) throw new Error(`Retranslation failed (${r.status})`);
       const d = await r.json();
@@ -569,10 +593,13 @@ class DocTranslateApp {
     document.getElementById('explanationCard').classList.remove('hidden');
     this.msg('Trying to translate…', 'info');
     try {
+      const sourceHint = this.sourceLang.value !== 'auto' ? this.sourceLang.value : undefined;
+      const body = {target_language:this.targetLang.value};
+      if (sourceHint) body.source_language_hint = sourceHint;
       const r = await fetch(`/documents/${this.currentDocumentId}/translate`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({target_language:this.targetLang.value})
+        body:JSON.stringify(body)
       });
       if (!r.ok) throw new Error(`Translation failed (${r.status})`);
       const d = await r.json();
