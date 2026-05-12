@@ -696,3 +696,154 @@ def test_lang_mappings_are_consistent():
         # normalize_lang_code returns lowercase for zh
         assert back_to_iso.lower() == iso_code.lower() or back_to_iso.replace('-', '').lower() == iso_code.replace('-', '').lower(), \
             f"Round-trip failed: {iso_code} -> {tess_code} -> {back_to_iso}"
+
+
+def test_validate_file_magic_png(client):
+    """Test that validate_file_magic correctly identifies PNG files."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    # Valid PNG bytes
+    png_bytes = _create_real_png_bytes()
+    file = UploadFile(filename="test.png", file=BytesIO(png_bytes))
+    assert validate_file_magic(file, ".png") is True
+
+
+def test_validate_file_magic_jpeg(client):
+    """Test that validate_file_magic correctly identifies JPEG files."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    jpeg_bytes = _create_real_jpeg_bytes()
+    file = UploadFile(filename="test.jpg", file=BytesIO(jpeg_bytes))
+    assert validate_file_magic(file, ".jpg") is True
+
+
+def test_validate_file_magic_rejects_renamed_exe(client):
+    """Test that validate_file_magic rejects a non-image with .png extension."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    # ELF header bytes masquerading as PNG
+    elf_header = b"\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    file = UploadFile(filename="harmless.png", file=BytesIO(elf_header))
+    assert validate_file_magic(file, ".png") is False
+
+
+def test_validate_file_magic_rejects_jpeg_as_png(client):
+    """Test that validate_file_magic rejects JPEG bytes sent as .png."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    jpeg_bytes = _create_real_jpeg_bytes()
+    file = UploadFile(filename="test.png", file=BytesIO(jpeg_bytes))
+    assert validate_file_magic(file, ".png") is False
+
+
+def test_validate_file_magic_rejects_png_as_jpeg(client):
+    """Test that validate_file_magic rejects PNG bytes sent as .jpg."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    png_bytes = _create_real_png_bytes()
+    file = UploadFile(filename="test.jpg", file=BytesIO(png_bytes))
+    assert validate_file_magic(file, ".jpg") is False
+
+
+def test_validate_file_magic_text_file(client):
+    """Test that validate_file_magic accepts valid UTF-8 text."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    text_bytes = b"This is a valid text file with content."
+    file = UploadFile(filename="test.txt", file=BytesIO(text_bytes))
+    assert validate_file_magic(file, ".txt") is True
+
+
+def test_validate_file_magic_rejects_binary_as_text(client):
+    """Test that validate_file_magic rejects binary content as .txt."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    # Binary data with null bytes
+    binary_bytes = b"\x00\x01\x02Some text\x00\x00binary\x00data"
+    file = UploadFile(filename="test.txt", file=BytesIO(binary_bytes))
+    assert validate_file_magic(file, ".txt") is False
+
+
+def test_validate_file_magic_rejects_non_utf8_as_text(client):
+    """Test that validate_file_magic rejects non-UTF-8 content as .txt."""
+    from app import validate_file_magic
+    from io import BytesIO
+    from fastapi import UploadFile
+    
+    # Invalid UTF-8 bytes
+    bad_utf8 = b"\xff\xfe\x00\x01"
+    file = UploadFile(filename="test.txt", file=BytesIO(bad_utf8))
+    assert validate_file_magic(file, ".txt") is False
+
+
+def test_upload_rejects_elf_as_png(client):
+    """Integration test: ELF binary renamed to .png should get 422."""
+    elf_header = b"\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    response = client.post("/documents/upload", files={"file": ("harmless.png", elf_header, "image/png")})
+    assert response.status_code == 422
+    assert "content does not match" in response.json()["detail"].lower()
+
+
+def test_upload_rejects_binary_as_txt(client):
+    """Integration test: binary data sent as .txt should get 422."""
+    binary_data = b"\x00\x01\x02binary\x00content\x00"
+    response = client.post("/documents/upload", files={"file": ("test.txt", binary_data, "text/plain")})
+    assert response.status_code == 422
+    assert "valid text" in response.json()["detail"].lower() or "binary" in response.json()["detail"].lower()
+
+
+def test_upload_rejects_png_as_jpg(client):
+    """Integration test: PNG bytes sent as .jpg should get 422."""
+    png_bytes = _create_real_png_bytes()
+    response = client.post("/documents/upload", files={"file": ("photo.jpg", png_bytes, "image/jpeg")})
+    assert response.status_code == 422
+
+
+def test_get_document_rejects_path_traversal_ids(client):
+    """Test that get_document_by_id rejects path traversal attempts."""
+    from app import get_document_by_id
+    assert get_document_by_id("../etc/passwd") is None
+    assert get_document_by_id("foo/bar") is None
+    assert get_document_by_id("..\\..\\windows\\system32") is None
+    assert get_document_by_id(None) is None
+    assert get_document_by_id("") is None
+
+
+def test_api_get_with_path_traversal_id_returns_404(client):
+    """Test that public endpoint returns 404 for path-traversal document IDs."""
+    response = client.get("/documents/../etc/passwd")
+    assert response.status_code == 404
+    
+    response = client.get("/documents/foo/bar")
+    # FastAPI may return 404 (not found) or 422 (path param validation fails)
+    # Either is fine — important thing is it doesn't access filesystem
+    assert response.status_code in (404, 422)
+
+
+def test_uploaded_file_path_safety(client):
+    """Test that uploaded files are stored safely within UPLOADS_DIR."""
+    test_content = b"Safe path test content"
+    test_file = ("path_test.txt", test_content, "text/plain")
+    response = client.post("/documents/upload", files={"file": test_file})
+    assert response.status_code == 200
+    
+    # Verify file was stored inside uploads dir, not at a random path
+    from app import _document_store, UPLOADS_DIR
+    doc_id = response.json()["id"]
+    stored_path = _document_store[doc_id].stored_path
+    assert stored_path.startswith(UPLOADS_DIR), f"stored_path {stored_path} not in {UPLOADS_DIR}"
+    assert os.path.exists(stored_path)
