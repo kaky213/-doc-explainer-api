@@ -157,3 +157,60 @@ All items from the multilingual plan are now implemented, tested, and documented
 - ✅ No hangs — bounded OCR retries, timeout-aware pipeline
 
 **Total test count: 105 tests, 0 failures**
+
+---
+
+### 🔧 Codebase Cleanup & Security Hardening (2026-05-11 9:42 PM MDT)
+
+#### Summary
+Comprehensive cleanup + security + bug-fix pass. 109 tests passing, zero regressions.
+
+#### Security Fixes
+
+| Issue | Severity | Fix |
+|---|---|---|
+| **Always-on DEBUG_OCR logging** — leaked OCR debug info in prod | **High** | Changed to env var `DEBUG_OCR` (default false). Only logs metadata, never raw text. |
+| **Health endpoint leaked admin_key status** (set/default) | **Medium** | Removed `admin_key` field from health response. |
+| **Admin key comparison was vulnerable to timing attacks** | **Medium** | Switched `!=` to `hmac.compare_digest()`. |
+| **Health endpoint leaked DeepSeek enablement** (enabled/disabled) | **Low** | Kept — informs demo debugging; no significant blast radius. |
+| **`render.yaml` had stale `ADMIN_KEY` env var** (unused) | **Low** | Removed dead env var; code only uses `DEMO_ADMIN_KEY`. |
+
+#### Code Cleanup
+
+| Item | Details |
+|---|---|
+| **Dead code removed** | `rotate_image_cv()` (unused), `get_osd_rotation()` (unused), `save_documents()` (replaced by in-memory store). |
+| **Unused imports removed** | `ThreadPoolExecutor`, `timedelta`. |
+| **Duplicate `uuid` import removed** | Was imported twice at lines 8 and 28. |
+| **`normalize_lang_code` wrapper removed** | Was a 3-line pass-through to `ld.normalize_lang_code`. All callers now go direct. |
+| **Bare except blocks annotated** | 5 silent `except Exception: pass` in orientation detection now log debug messages. |
+| **Config drift fixed** | `config.py::MAX_TEXT_BYTES` was 500 KB while `app.py` enforced 5 MB. Now both say 5 MB with comments explaining the policy. |
+| **Stale tracked files removed** | `app.log`, `app.pid`, `cloudflared-linux-amd64.deb`, 3 test scripts. |
+| **Docs moved to `docs/`** | Organization: `docs/OVERNIGHT_NOTES.md`, `docs/QA_*.md`, `docs/REFINED_*.md`. |
+| **`.gitignore` expanded** | Added `app.log`, `app.pid`, `*.deb`, IDE files, testing artifacts, OS files. |
+
+#### Config Centralization (from prior commit 4bbba39)
+- `config.py` is now the single source of truth for language mappings
+- `ALLOWED_EXTENSIONS` still duplicated in `app.py` for the API layer (intentional — the upload endpoint needs its own validation constants)
+- `MAX_IMAGE_BYTES` diverges intentionally: 10 MB in app.py (demo), 20 MB in config.py (theoretical max for future paid tier)
+
+#### Bugs Verified Non-Issues
+- **Polling in app.js**: `setTimeout`-based with adaptive backoff (2s → 3s → 5s), no `requestAnimationFrame` CPU burn.
+- **Upload path traversal**: UUID filenames, no user-controlled path components.
+- **SSRF**: Both outbound HTTP calls use hardcoded URLs (`api.mymemory.translated.net`, `api.deepseek.com`), no dynamic URL construction.
+- **Shell injection**: Zero `os.system()`, `eval()`, or `exec()` calls.
+- **File upload validation**: Extension whitelist, MIME validation, size limits, dimension limits (8K max, 20px min), PNG header re-encoding stops cursed images.
+- **Status transitions**: Well-structured, no stuck-state paths identified.
+
+#### Remaining (Deferred)
+- **`DEMO_ADMIN_KEY` default is still `change-me-in-production`** — needs a strong random default or env-enforced requirement for new deploys.
+- **`DEEPSEEK_API_KEY` not set on Render** — falls back to MyMemory. Working state, not a bug.
+- **`/documents/{id}` is public** — intentional for demo polling, but future paid product will need ownership checks.
+- **`MYMEMORY_EMAIL` is `your_email@example.com` in `.env`** — demo-only, users should set their own.
+- **`manage-simple.sh` vs `manage.sh`** — two nearly identical scripts. `manage.sh` has colors; `manage-simple.sh` is minimalist. Combined cleanup deferred.
+- **`railway.toml`** — references chi_sim only (not all 15 langs). Since Render is the live deployment, this is a dead file for the other platform. Not worth removing.
+
+#### Test Results
+```
+109 passed in 88.40s — zero regressions
+```
