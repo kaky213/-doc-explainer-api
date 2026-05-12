@@ -607,3 +607,74 @@ def test_translate_document_not_found(client):
         # Clean up test file
         if os.path.exists(test_file_path):
             os.remove(test_file_path)
+
+
+def test_translate_unsupported_target_language(client):
+    """Test that requesting an unsupported target language returns 400."""
+    import os
+    import io
+    
+    # Upload a simple txt file (no OCR needed)
+    text_content = b"This is a test document for translation validation."
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("test.txt", text_content, "text/plain")}
+    )
+    assert response.status_code == 200
+    doc_id = response.json()["id"]
+    
+    # Try translate with unsupported language
+    translate_request = {
+        "target_language": "xx",
+        "source_language_hint": None,
+    }
+    response = client.post(f"/documents/{doc_id}/translate", json=translate_request)
+    assert response.status_code == 400
+    assert "Unsupported target language" in response.json()["detail"]
+
+
+def test_translate_supported_language(client):
+    """Test that a supported target language is accepted (no 400)."""
+    import config as cfg
+    
+    text_content = b"This is a test document for multi-language validation."
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("test.txt", text_content, "text/plain")}
+    )
+    assert response.status_code == 200
+    doc_id = response.json()["id"]
+    
+    # Test first supported language (en) — validates endpoint logic
+    translate_request = {
+        "target_language": cfg.SUPPORTED_TARGET_LANGUAGES[0],
+        "source_language_hint": None,
+    }
+    response = client.post(f"/documents/{doc_id}/translate", json=translate_request)
+    assert response.status_code != 400, f"Language '{cfg.SUPPORTED_TARGET_LANGUAGES[0]}' was incorrectly rejected"
+
+
+def test_lang_display_names_match_supported_list():
+    """Verify that all supported target languages have display names."""
+    import config as cfg
+    for lang in cfg.SUPPORTED_TARGET_LANGUAGES:
+        assert lang in cfg.LANG_DISPLAY_NAMES, f"Missing display name for '{lang}'"
+        assert lang in cfg.LANG_FULL_NAMES, f"Missing full name for '{lang}'"
+        assert lang in cfg.LANG_SCRIPT_GROUPS or any(
+            lang in group for group in cfg.LANG_SCRIPT_GROUPS.values()
+        ), f"'{lang}' not found in any script group"
+
+
+def test_lang_mappings_are_consistent():
+    """Verify bidirectionality of ISO ↔ Tesseract mappings."""
+    import config as cfg
+    import lang_detect as ld
+    for iso_code in cfg.SUPPORTED_TARGET_LANGUAGES:
+        tess_code = cfg.ISO_TO_TESSERACT.get(iso_code)
+        assert tess_code, f"Missing Tesseract code for '{iso_code}'"
+        # Reverse via lang_detect.normalize_lang_code
+        back_to_iso = ld.normalize_lang_code(tess_code)
+        assert back_to_iso, f"normalize_lang_code failed for '{tess_code}'"
+        # normalize_lang_code returns lowercase for zh
+        assert back_to_iso.lower() == iso_code.lower() or back_to_iso.replace('-', '').lower() == iso_code.replace('-', '').lower(), \
+            f"Round-trip failed: {iso_code} -> {tess_code} -> {back_to_iso}"

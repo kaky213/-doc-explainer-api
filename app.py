@@ -686,17 +686,11 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
     n_total_calls = 0
     ocr_call_time = 0.0
 
-    # Diverse language candidates for real-world photos (signs, labels, notices)
-    # Use multiple language packs in order of global sign prevalence
-    lang_candidates = [
-        "eng",           # English (default for most signs)
-        "eng+spa",       # Spanish (very common)
-        "eng+fra",       # French
-        "eng+deu",       # German (was missing!)
-        "eng+por",       # Portuguese
-        "eng+ita",       # Italian
-        "eng+nld",       # Dutch
-    ]
+    # Diverse language candidates for tiered OCR routing.
+    # Tier 1: "eng" only (fastest path, covers ~95% of documents).
+    # Tier 2: script-aware fallback (Cyrillic, Arabic, Devanagari, CJK).
+    # Tier 3: cfg.GENERAL_FALLBACK_LANGS — all combos defined in config.py.
+    psm_candidates = [6, 11]  # 6=uniform block, 11=sparse text
     psm_candidates = [6, 11]  # 6=uniform block, 11=sparse text
 
     best = {
@@ -845,25 +839,28 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
         script_info = ld.detect_script_from_text(best_text_for_script)
         dominant_script = script_info.get("dominant")
 
-        # Build script-specific fallback language list
+        # Build script-specific fallback language list using centralized config
         script_langs = []
         if dominant_script == "cyrillic":
-            script_langs = ["rus", "rus+ukr", "eng+rus"]
+            script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("cyrillic", {}).get("primary", ["rus"])[:] + \
+                cfg.SCRIPT_OCR_STRATEGIES.get("cyrillic", {}).get("fallback_latin", ["eng+rus"])
         elif dominant_script == "arabic":
-            script_langs = ["ara", "ara+eng"]
+            script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("arabic", {}).get("primary", ["ara"])[:] + \
+                cfg.SCRIPT_OCR_STRATEGIES.get("arabic", {}).get("fallback_latin", ["ara+eng"])
         elif dominant_script == "devanagari":
-            script_langs = ["hin", "hin+eng"]
+            script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("devanagari", {}).get("primary", ["hin"])[:] + \
+                cfg.SCRIPT_OCR_STRATEGIES.get("devanagari", {}).get("fallback_latin", ["hin+eng"])
         elif dominant_script == "han":
             # Check for kana presence to differentiate Japanese vs Chinese
             kana_pct = script_info.get("scripts", {}).get("kana", 0.0)
             if kana_pct > 0.05:
-                script_langs = ["jpn", "jpn+eng", "chi_sim"]
+                script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("cjk", {}).get("primary_japanese", ["jpn", "jpn+eng", "chi_sim"])
             else:
-                script_langs = ["chi_sim", "chi_tra", "chi_sim+eng"]
+                script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("cjk", {}).get("primary_chinese", ["chi_sim", "chi_tra", "chi_sim+eng"])
         elif dominant_script == "kana":
-            script_langs = ["jpn", "jpn+eng", "chi_sim"]
+            script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("cjk", {}).get("primary_japanese", ["jpn", "jpn+eng", "chi_sim"])
         elif dominant_script == "hangul":
-            script_langs = ["kor", "kor+eng"]
+            script_langs = cfg.SCRIPT_OCR_STRATEGIES.get("cjk", {}).get("primary_korean", ["kor", "kor+eng"])
 
         for flang in script_langs:
             _check_deadline()
@@ -883,7 +880,7 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
 
         # Tier 3: General fallback if script-specific didn't yield good results
         if (not best["text"] or best["score"] < 10) and not high_confidence_found:
-            fallback_langs = ["eng+spa", "eng+fra", "eng+deu", "eng+por", "eng+spa+fra", "eng+ita", "eng+nld"]
+            fallback_langs = cfg.GENERAL_FALLBACK_LANGS
             for variant_name, variant_img in variants.items():
                 _check_deadline()
                 if high_confidence_found:
@@ -2292,6 +2289,14 @@ async def translate_document(document_id: str, request: TranslationRequest):
         raise HTTPException(
             status_code=400,
             detail="Cannot translate: no OCR text available for this document."
+        )
+
+    # Validate target language against centralized supported list
+    if request.target_language not in cfg.SUPPORTED_TARGET_LANGUAGES:
+        logger.warning(f"Translate blocked: unsupported target lang '{request.target_language}' for doc {document_id}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported target language '{request.target_language}'. Supported: {', '.join(cfg.SUPPORTED_TARGET_LANGUAGES)}"
         )
 
     logger.info(f"Translate start: doc={document_id[:8]}... lang={request.source_language_hint or 'auto'}->{request.target_language}")
