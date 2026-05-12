@@ -10,8 +10,14 @@ import logging
 import time
 from pathlib import Path
 
-# Absolute base directory — works regardless of uvicorn's CWD
+# Absolute base directory - works regardless of uvicorn's CWD
 BASE_DIR = Path(__file__).resolve().parent
+
+# Import config and language detection modules
+# These must be imported before cv2/numpy to avoid circular issues
+import config as cfg
+import lang_detect as ld
+
 import cv2
 import numpy as np
 import re
@@ -63,24 +69,24 @@ def debug_ocr_flow(best_text: str, detected_language: str, best: dict) -> tuple:
 def ocr_quality_from_score(score: float, conf: float, text: str = "") -> str:
     """
     Determine OCR quality label based on combined score, confidence, and text content.
-    
+
     Returns one of: "high", "medium", "low", "none"
     """
     if not text or not text.strip():
         return "none"
-    
+
     cleaned = text.strip()
     word_count = len(cleaned.split())
     alpha_ratio = sum(1 for c in cleaned if c.isalpha()) / max(len(cleaned), 1)
-    
-    # Excellent results — clear scan with good confidence
+
+    # Excellent results - clear scan with good confidence
     if conf >= 80 and score >= 70:
         return "high"
-    
-    # Good results — usable text with reasonable confidence
+
+    # Good results - usable text with reasonable confidence
     if conf >= 60 and score >= 45:
         return "medium"
-    
+
     # Long text with reasonable letter ratio even with mediocre confidence
     # This handles boards/signs/menus where many chars are correct but confidence is noisy
     if len(cleaned) >= 60 and alpha_ratio >= 0.5 and word_count >= 8:
@@ -88,16 +94,16 @@ def ocr_quality_from_score(score: float, conf: float, text: str = "") -> str:
             return "medium"
         if conf >= 35:
             return "low"  # Permissive: lots of content, partial errors expected
-    
-    # Short text but clear (dates, names, prices) — be permissive
+
+    # Short text but clear (dates, names, prices) - be permissive
     if len(cleaned) >= 10 and alpha_ratio >= 0.6 and conf >= 50:
         return "low"  # Short but meaningful
-    
-    # Long text, very noisy confidence but lots of content — borderline
+
+    # Long text, very noisy confidence but lots of content - borderline
     if len(cleaned) >= 100 and alpha_ratio >= 0.4:
         return "low"  # Has substance despite low confidence
-    
-    # Everything else — too little or too noisy
+
+    # Everything else - too little or too noisy
     return "low"
 
 
@@ -145,7 +151,7 @@ def score_ocr_text(text: str) -> float:
     length_score = min(len(cleaned), 500) / 10.0
     ratio_score = (useful / max(len(cleaned), 1)) * 100.0
     line_score = min(len([ln for ln in cleaned.splitlines() if ln.strip()]), 12) * 2.0
-    
+
     # Garbage penalty: heavily penalize text with unusual character distributions
     # Real text has mostly alphabetic chars; garbage OCR produces symbols, scattered punctuation
     garbage_penalty = 0.0
@@ -157,12 +163,12 @@ def score_ocr_text(text: str) -> float:
             garbage_penalty = symbol_ratio * 50  # heavy penalty for high symbol density
         elif symbol_ratio > 0.15:
             garbage_penalty = symbol_ratio * 20  # moderate penalty
-    
+
     # Very short text with good alpha ratio is still useful (dates, names, prices)
     if len(cleaned) >= 10 and letters >= 8 and garbage_penalty == 0.0:
-        # Short but meaningful — small bonus
+        # Short but meaningful - small bonus
         garbage_penalty = -5.0
-    
+
     return length_score + ratio_score + line_score + spaces * 0.1 - garbage_penalty
 
 
@@ -184,7 +190,7 @@ def analyze_image_quality(pil_image) -> dict:
     """
     Quick analysis of image quality before heavy OCR processing.
     Checks: blur, brightness, contrast, blank/uniform detection.
-    
+
     Returns dict with:
       - blur_level: "none" | "low" | "medium" | "high"
       - brightness: "normal" | "too_dark" | "too_bright" | "overexposed"
@@ -196,7 +202,7 @@ def analyze_image_quality(pil_image) -> dict:
     """
     import numpy as np
     import cv2
-    
+
     result = {
         "blur_level": "none",
         "brightness": "normal",
@@ -206,82 +212,82 @@ def analyze_image_quality(pil_image) -> dict:
         "warnings": [],
         "can_process": True,
     }
-    
+
     try:
         img = np.array(pil_image)
         if not isinstance(img, np.ndarray) or img.ndim < 2 or img.size == 0:
             result["warnings"].append("Empty or invalid image data")
             result["can_process"] = False
             return result
-        
+
         # Convert to grayscale for analysis
         if img.ndim == 3:
             gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         else:
             gray = img
-        
+
         if gray.ndim != 2 or gray.size == 0:
             result["warnings"].append("Could not extract grayscale data for analysis")
             return result
-        
+
         # 1. Blur detection using Laplacian variance
         laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
         if laplacian_var < 20:
             result["blur_level"] = "high"
-            result["warnings"].append("Very blurry — sharp focus needed")
+            result["warnings"].append("Very blurry - sharp focus needed")
         elif laplacian_var < 50:
             result["blur_level"] = "medium"
-            result["warnings"].append("Moderately blurry — may reduce OCR accuracy")
+            result["warnings"].append("Moderately blurry - may reduce OCR accuracy")
         elif laplacian_var < 100:
             result["blur_level"] = "low"
-        
+
         # 2. Brightness check
         # Use percentile-based check so white background with black text isn't flagged
         mean_brightness = np.mean(gray)
         lower_percentile = np.percentile(gray, 5)
         if mean_brightness < 30:
             result["brightness"] = "too_dark"
-            result["warnings"].append("Very dark — try better lighting")
+            result["warnings"].append("Very dark - try better lighting")
         elif mean_brightness < 60:
             result["brightness"] = "dark"
-            result["warnings"].append("Dark image — may reduce OCR quality")
+            result["warnings"].append("Dark image - may reduce OCR quality")
         elif mean_brightness > 245 and lower_percentile > 200:
             # Mean very high AND the darkest 5% is still light → truly overexposed
             result["brightness"] = "overexposed"
-            result["warnings"].append("Overexposed — text may be washed out")
+            result["warnings"].append("Overexposed - text may be washed out")
         elif mean_brightness > 230 and lower_percentile > 180:
             result["brightness"] = "too_bright"
-        
+
         # 3. Contrast check
         std_brightness = np.std(gray)
         if std_brightness < 15:
             result["contrast"] = "very_low"
-            result["warnings"].append("Very low contrast — text may be hard to read")
+            result["warnings"].append("Very low contrast - text may be hard to read")
         elif std_brightness < 30:
             result["contrast"] = "low"
-        
+
         # 4. Uniform/blank image detection
         # If std is extremely low, image is essentially uniform
         if std_brightness < 5:
             result["is_uniform"] = True
-            result["warnings"].append("Image appears blank or uniform — no text expected")
-        
+            result["warnings"].append("Image appears blank or uniform - no text expected")
+
         # 5. Image too small to contain readable text
         h, w = gray.shape[:2]
         if h < 30 or w < 30:
-            result["warnings"].append("Image is very small — text may not be readable")
-        
+            result["warnings"].append("Image is very small - text may not be readable")
+
         result["should_warn"] = len(result["warnings"]) > 0
-        
+
         # Only block processing for truly hopeless cases
         if result["is_uniform"] or (result["blur_level"] == "high" and result["brightness"] in ("too_dark", "overexposed")):
             # Still allow processing, but mark as very low confidence
-            result["can_process"] = True  # Let OCR try — some images surprise us
-        
+            result["can_process"] = True  # Let OCR try - some images surprise us
+
     except Exception as e:
         logger.warning(f"Image quality analysis failed: {e}")
         result["warnings"].append("Could not analyze image quality")
-    
+
     return result
 
 
@@ -290,19 +296,19 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
     Try multiple strategies to detect and correct image rotation.
     Returns (rotated_array, info_updates) where info_updates is a dict
     describing which strategy was used and what angle was applied.
-    
+
     Strategies (tried in order):
     1. Tesseract OSD (best for pages with text)
     2. EXIF orientation (for phone camera rotations)
     3. Histogram-based detection (for images without readable text)
     """
     updates = {"rotated_by": None, "rotated_via": None, "rotation_angle": 0}
-    
+
     if img_array.ndim == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
-    
+
     # Strategy 1: Tesseract OSD
     try:
         from PIL import Image as PILImage
@@ -316,9 +322,9 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
         if angle_match:
             angle = int(angle_match.group(1))
             if angle in [90, 180, 270]:
-                result_img = cv2.rotate(gray if img_array.ndim == 2 else img_array, 
-                    {90: cv2.ROTATE_90_CLOCKWISE, 
-                     180: cv2.ROTATE_180, 
+                result_img = cv2.rotate(gray if img_array.ndim == 2 else img_array,
+                    {90: cv2.ROTATE_90_CLOCKWISE,
+                     180: cv2.ROTATE_180,
                      270: cv2.ROTATE_90_COUNTERCLOCKWISE}[angle])
                 updates["rotated_by"] = angle
                 updates["rotated_via"] = "osd"
@@ -327,7 +333,7 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
                 return result_img, updates
     except Exception:
         pass  # OSD may fail on small/noisy images
-    
+
     # Strategy 2: EXIF orientation (phone cameras often embed this)
     # This is typically handled by PIL.open() automatically, but we try
     # explicit EXIF check for completeness
@@ -338,7 +344,7 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
         pass
     except Exception:
         pass
-    
+
     # Strategy 3: Histogram-based orientation detection
     # For images with text, text lines create horizontal gradients.
     # We compare horizontal vs vertical gradient energy.
@@ -346,10 +352,10 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
         # Compute Sobel gradients
         grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
         grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        
+
         energy_x = np.sum(np.abs(grad_x))
         energy_y = np.sum(np.abs(grad_y))
-        
+
         # For text-heavy images, horizontal edges dominate.
         # If vertical edges dominate, the image is likely rotated 90/270.
         if energy_y > energy_x * 2.5 and energy_x > 0:
@@ -361,7 +367,7 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
             return result_img, updates
     except Exception:
         pass
-    
+
     return gray if img_array.ndim != 3 else img_array, updates
 
 
@@ -376,7 +382,7 @@ def preprocess_for_ocr(pil_image):
         # Fall back to a small blank image
         gray = np.ones((100, 100), dtype=np.uint8) * 255
     elif img.ndim == 1:
-        # Single channel as 1D array — reshape to grayscale
+        # Single channel as 1D array - reshape to grayscale
         gray = img.reshape(-1, 1) if img.ndim == 1 else img
     elif img.ndim == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -387,7 +393,7 @@ def preprocess_for_ocr(pil_image):
         gray = np.ones((100, 100), dtype=np.uint8) * 255
 
     h, w = gray.shape[:2]
-    max_dim = 1200  # 1200px max side — plenty for OCR, 2-4x faster than 2000
+    max_dim = 1200  # 1200px max side - plenty for OCR, 2-4x faster than 2000
     info = {"original_dims": (w, h)}
 
     # Step 1: Downscale large images to max 2000px on longest side
@@ -404,7 +410,7 @@ def preprocess_for_ocr(pil_image):
     # Step 2: CLAHE contrast enhancement (improves real-world photos significantly)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
-    
+
     # Step 3: Multi-strategy orientation correction
     # Tries OSD, EXIF, histogram-based detection and picks best result
     enhanced, rot_updates = autorotate_multipass(enhanced, info)
@@ -420,7 +426,7 @@ def build_ocr_variants(pil_image):
     """
     Build multiple preprocessing variants of an image for OCR.
     Returns dict of {variant_name: pil_image_or_numpy_array}.
-    
+
     Variants cover: original grayscale, Otsu threshold, adaptive threshold,
     inverted (light-text-on-dark-bg), and high-contrast boost.
     """
@@ -428,7 +434,7 @@ def build_ocr_variants(pil_image):
     if not isinstance(img, np.ndarray) or img.ndim < 2 or img.size == 0:
         # Fallback: return original only
         return {"original": pil_image}
-    
+
     if img.ndim == 2:
         gray = img
     elif img.ndim == 3:
@@ -437,32 +443,32 @@ def build_ocr_variants(pil_image):
         return {"original": pil_image}
 
     variants = {}
-    
+
     # 1. Original grayscale (always works)
     variants["original"] = pil_image
-    
+
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    
-    # 2. Otsu threshold — good for scanned docs with even contrast
+
+    # 2. Otsu threshold - good for scanned docs with even contrast
     otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
     variants["otsu"] = otsu
-    
-    # 3. Adaptive threshold — good for uneven lighting, shadows
+
+    # 3. Adaptive threshold - good for uneven lighting, shadows
     adaptive = cv2.adaptiveThreshold(
         blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10
     )
     variants["adaptive"] = adaptive
-    
-    # 4. Inverted + Otsu — for light-text-on-dark-background (signs, stickers)
+
+    # 4. Inverted + Otsu - for light-text-on-dark-background (signs, stickers)
     inverted = cv2.bitwise_not(blur)
     otsu_inv = cv2.threshold(inverted, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
     variants["invert"] = otsu_inv
-    
-    # 5. Denoised original — median filter for noisy/low-light photos
+
+    # 5. Denoised original - median filter for noisy/low-light photos
     denoised = cv2.medianBlur(gray, 3)
     variants["denoised"] = denoised
-    
-    # 6. High-contrast boost — for washed-out or low-contrast images
+
+    # 6. High-contrast boost - for washed-out or low-contrast images
     # Uses alpha=2.0 beta=-30 for strong contrast stretch
     high_contrast = cv2.convertScaleAbs(gray, alpha=2.0, beta=-30)
     variants["high_contrast"] = high_contrast
@@ -471,151 +477,67 @@ def build_ocr_variants(pil_image):
 
 
 def language_word_bonus(text: str, lang: str) -> float:
-    """Return bonus score (0.0 to 30.0) based on how many known common function words for that language appear in the text."""
-    # Hardcoded dictionary of high-frequency short words per language
-    lang_words = {
-        "por": ["de", "da", "do", "das", "dos", "e", "em", "é", "seja", "bem", "para", "que", "com", "um", "uma"],
-        "spa": ["de", "la", "el", "en", "es", "y", "del", "los", "las", "que", "con", "una", "por", "se", "al"],
-        "deu": ["der", "die", "das", "und", "ist", "in", "von", "den", "dem", "zu", "nicht", "mit", "für", "auf", "ein"],
-        "eng": ["the", "and", "is", "in", "of", "to", "a", "for", "on", "this", "with", "are", "or", "be", "an"],
-        "fra": ["le", "la", "les", "de", "du", "des", "et", "en", "est", "que", "une", "pour", "pas", "au", "sur"],
-    }
-    
-    if not text or lang not in lang_words:
+    """Return bonus score (0.0 to 30.0) based on language detection confidence.
+    Delegates to lang_detect module for comprehensive language detection."""
+    if not text:
         return 0.0
-    
-    # Clean and split text into words
-    words = text.lower().split()
-    bonus = 0.0
-    
-    # Check each word against language-specific function words
-    for word in words:
-        # Remove punctuation for better matching
-        clean_word = word.strip(".,;:!?\"'()[]{}<>")
-        if clean_word in lang_words[lang]:
-            bonus += 2.0  # 2 points per matched function word
-    
-    # Cap the bonus at 30.0
-    return min(bonus, 30.0)
+    result = ld.detect_language_from_ocr_text(text)
+    detected = result.get("lang") if result else None
+    if not detected:
+        return 0.0
+    # Give bonus proportional to confidence
+    confidence = result.get("confidence", 0.0)
+    if confidence < 0.3:
+        return 5.0 if detected else 0.0
+    return min(confidence * 30.0, 30.0)
 
 
 def detect_language_from_ocr_text(text: str):
     """
     Lightweight heuristic to infer likely language from short noisy OCR text.
-    Returns ISO-style language code (pt, es, en, de, fr) or None if confidence is too weak.
+    Now delegates to lang_detect for full Unicode-aware detection.
+    Returns ISO-style language code (pt, es, en, de, fr, ru, ar, hi, zh-CN, ja, ko)
+    or None if confidence is too weak.
     """
-    if not text:
-        return None
-    
-    # Normalize: lowercase, remove extra whitespace
-    normalized = text.lower().strip()
-    
-    # Too short for reliable detection
-    words = normalized.split()
-    if len(words) < 3:
-        return None
-    
-    # Language scoring
-    scores = {
-        'pt': 0,  # Portuguese
-        'es': 0,  # Spanish
-        'en': 0,  # English
-        'de': 0,  # German
-        'fr': 0,  # French
-    }
-    
-    # 1. Function word matching
-    function_words = {
-        'pt': ['de', 'em', 'mais', 'casa', 'para', 'com', 'bem', 'seja', 'uma', 'que',
-               'não', 'se', 'como', 'mas', 'ao', 'pela', 'pelo', 'num', 'numa'],
-        'es': ['de', 'la', 'el', 'en', 'es', 'y', 'del', 'los', 'las', 'que',
-               'con', 'una', 'por', 'se', 'al', 'un', 'lo', 'su', 'para', 'mi'],
-        'en': ['the', 'and', 'is', 'in', 'of', 'to', 'a', 'for', 'on', 'this',
-               'with', 'are', 'or', 'be', 'an', 'that', 'it', 'as', 'was', 'he'],
-        'de': ['der', 'die', 'das', 'und', 'ist', 'in', 'von', 'den', 'dem', 'zu',
-               'nicht', 'mit', 'für', 'auf', 'ein', 'sich', 'des', 'auch', 'hat', 'noch'],
-        'fr': ['le', 'la', 'les', 'de', 'du', 'des', 'et', 'en', 'est', 'que',
-               'une', 'pour', 'pas', 'au', 'sur', 'un', 'il', 'qui', 'ne', 'vous'],
-    }
-    
-    for word in words:
-        # Remove punctuation for better matching
-        clean_word = word.strip(".,;:!?\"'()[]{}<>")
-        for lang, word_list in function_words.items():
-            if clean_word in word_list:
-                scores[lang] += 2
-    
-    # 2. Accented character detection (strong indicators)
-    char_clues = {
-        'pt': ['ã', 'õ', 'ç', 'ê', 'â', 'ô'],  # Portuguese unique
-        'es': ['ñ', 'á', 'é', 'í', 'ó', 'ú', 'ü'],  # Spanish unique
-        'fr': ['à', 'â', 'ç', 'è', 'é', 'ê', 'ë', 'î', 'ï', 'ô', 'ù', 'û', 'ü'],  # French
-        'de': ['ä', 'ö', 'ü', 'ß'],  # German
-    }
-    
-    for lang, chars in char_clues.items():
-        for char in chars:
-            if char in normalized:
-                scores[lang] += 3  # Strong indicator
-    
-    # 3. Portuguese-specific strong clues
-    pt_strong_clues = ['proprio', 'existencia', 'confeitaria', 'fabrica', 'fabrico',
-                       'possivel', 'processo', 'conhecimento', 'especifico',
-                       'você', 'avô', 'português', 'francês']
-    for clue in pt_strong_clues:
-        if clue in normalized:
-            scores['pt'] += 3
-    
-    # 4. Spanish-specific strong clues
-    es_strong_clues = ['qué', 'cómo', 'dónde', 'cuándo', 'por qué', 'año', 'español',
-                       'señor', 'niño', 'mañana', 'llamar', 'llegar', 'calle']
-    for clue in es_strong_clues:
-        if clue in normalized:
-            scores['es'] += 3
-    
-    # Determine winner
-    max_score = max(scores.values())
-    if max_score < 3:  # Confidence threshold
-        return None
-    
-    # Get language with highest score
-    detected = max(scores.items(), key=lambda x: x[1])
-    return detected[0]  # Return language code
+    result = ld.detect_language_from_ocr_text(text)
+    if result and result.get("confidence", 0) >= 0.2:
+        return result.get("lang")
+    return None
 
 
 def detect_text_roi(pil_image):
     """
     Detect likely text region in image using multiple heuristic strategies.
     Input image is already preprocessed (CLAHE, resized, deskewed).
-    
+
     Strategies (tried in order):
     1. Adaptive Canny with median-based threshold selection
-    2. Fixed Canny (30, 120) — fallback if adaptive fails
-    3. Central crop (15% margin) — fallback
-    4. Original image — last resort
-    
+    2. Fixed Canny (30, 120) - fallback if adaptive fails
+    3. Central crop (15% margin) - fallback
+    4. Original image - last resort
+
     Returns (roi_pil_image, roi_info_dict)
     """
     try:
         import numpy as np
         cv_image = np.array(pil_image)
-        
+
         # Guard against mock/non-array inputs
         if not isinstance(cv_image, np.ndarray) or cv_image.ndim < 2 or cv_image.size == 0:
             raise ValueError("Invalid image array")
-        
+
         # Handle grayscale input from preprocessing
         if cv_image.ndim == 3:
             gray = cv2.cvtColor(cv_image, cv2.COLOR_RGB2GRAY)
         else:
             gray = cv_image
-        
+
         if gray.ndim != 2:
             raise ValueError("Non-2D grayscale array")
-        
+
         h, w = gray.shape[:2]
         original_size = (w, h)
-        
+
         def _canny_strategy(threshold_high, threshold_low=None, name="adaptive_canny"):
             """Run Canny with given thresholds and return best contour and score."""
             if threshold_low is None:
@@ -625,7 +547,7 @@ def detect_text_roi(pil_image):
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
             dilated = cv2.dilate(edges, kernel, iterations=2)
             contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
+
             best_score = 0
             best_contour = None
             for contour in contours:
@@ -649,32 +571,32 @@ def detect_text_roi(pil_image):
                     best_score = score
                     best_contour = contour
             return best_contour, best_score, name
-        
+
         # Strategy 1: Adaptive Canny threshold based on median intensity
         best_contour = None
         best_score = 0
         used_strategy = None
-        
+
         # Compute adaptive thresholds from image statistics
         median_val = np.median(gray)
         # Canny guidelines: low = max(0, median*0.4), high = min(255, median*1.33)
         adaptive_low = max(10, int(median_val * 0.4))
         adaptive_high = min(200, int(median_val * 1.33))
-        
+
         contour_1, score_1, name_1 = _canny_strategy(adaptive_high, adaptive_low, "adaptive_canny")
         if contour_1 is not None and score_1 > best_score:
             best_contour = contour_1
             best_score = score_1
             used_strategy = name_1
-        
-        # Strategy 2: Fixed Canny (30, 120) — fallback
+
+        # Strategy 2: Fixed Canny (30, 120) - fallback
         if best_score < 0.5:
             contour_2, score_2, name_2 = _canny_strategy(120, 30, "fixed_canny")
             if contour_2 is not None and score_2 > best_score:
                 best_contour = contour_2
                 best_score = score_2
                 used_strategy = name_2
-        
+
         if best_contour and best_score > 0.4:
             x, y, rect_w, rect_h = cv2.boundingRect(best_contour)
             pad_x = max(int(rect_w * 0.08), 8)
@@ -683,7 +605,7 @@ def detect_text_roi(pil_image):
             y = max(0, y - pad_y)
             rect_w = min(w - x, rect_w + 2 * pad_x)
             rect_h = min(h - y, rect_h + 2 * pad_y)
-            
+
             if rect_w >= 50 and rect_h >= 50:
                 roi = gray[y:y+rect_h, x:x+rect_w]
                 roi_pil = Image.fromarray(roi)
@@ -696,8 +618,8 @@ def detect_text_roi(pil_image):
                     "area_ratio": round(rect_w * rect_h / (w * h), 2)
                 }
                 return roi_pil, roi_info
-        
-        # Fallback 1: central crop (5% from each side — keeps most edge text)
+
+        # Fallback 1: central crop (5% from each side - keeps most edge text)
         margin_x = int(w * 0.05)
         margin_y = int(h * 0.05)
         if margin_x * 2 < w and margin_y * 2 < h:
@@ -711,10 +633,10 @@ def detect_text_roi(pil_image):
                 "roi_position": (margin_x, margin_y),
             }
             return roi_pil, roi_info
-        
+
     except Exception as e:
         logger.warning(f"ROI detection failed: {e}")
-    
+
     # Final fallback: original image
     roi_info = {
         "method": "original",
@@ -729,24 +651,24 @@ def detect_text_roi(pil_image):
 
 def run_best_effort_ocr(pil_image, deadline: float = None):
     t0 = time.time()
-    
+
     # Step 0: Quick image quality check
     quality_check = analyze_image_quality(pil_image)
     if quality_check["should_warn"]:
         for w in quality_check["warnings"]:
             logger.info(f"Image quality warning: {w}")
-    
+
     # Step 1: Preprocess (resize, CLAHE, multi-strategy deskew/orientation)
     preprocessed, pre_info = preprocess_for_ocr(pil_image)
     t1 = time.time()
-    
+
     # Step 2: Detect ROI for better OCR accuracy
     roi_pil, roi_info = detect_text_roi(preprocessed)
     t2 = time.time()
-    
+
     pre_time = (t1 - t0) * 1000
     roi_time = (t2 - t1) * 1000
-    
+
     # Log preprocessing and ROI decisions
     if DEBUG_OCR:
         logger.info(f"Preprocess: orig={pre_info.get('original_dims')}, "
@@ -756,10 +678,10 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
                    f"confidence={roi_info.get('confidence')}, "
                    f"original={roi_info.get('original_size')}, "
                    f"roi={roi_info.get('roi_size')}")
-    
+
     # Step 3: Build OCR variants from ROI
     variants = build_ocr_variants(roi_pil)
-    
+
     n_variants = len(variants)
     n_total_calls = 0
     ocr_call_time = 0.0
@@ -896,8 +818,8 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
 
     # Track which variants produced any text in Tier 1
     _variant_had_text = set()
-    
-    # Tier 1: eng only — covers ~95% of documents
+
+    # Tier 1: eng only - covers ~95% of documents
     for variant_name, variant_img in variants.items():
         _check_deadline()
         if high_confidence_found:
@@ -914,7 +836,7 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
             if result["text"]:
                 _variant_had_text.add(variant_name)
             _update_best(result, variant_name, "eng", psm)
-    
+
     # Tier 2 (fallback): multi-lang only if English produced no usable text
     # Try progressively broader language combinations
     fallback_langs = ["eng+spa", "eng+fra", "eng+deu", "eng+por", "eng+spa+fra", "eng+ita"]
@@ -923,7 +845,7 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
             _check_deadline()
             if high_confidence_found:
                 break
-            # For variants where eng found text: skip — eng already explored this variant
+            # For variants where eng found text: skip - eng already explored this variant
             if variant_name in _variant_had_text:
                 continue
             for flang in fallback_langs:
@@ -933,7 +855,7 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
                 result = _ocr_variant(variant_img, flang, 6)
                 if result is not None:
                     _update_best(result, variant_name, flang, 6)
-                    if result["score"] > 20:  # good enough — stop trying more langs
+                    if result["score"] > 20:  # good enough - stop trying more langs
                         break
 
     detected_language = "unknown"
@@ -942,15 +864,15 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
         detected_language = parts[-1] if len(parts) > 1 else parts[0]
 
     best_text = best["text"].strip()
-    
+
     if detected_language == "unknown" or not detected_language:
         fallback_lang = detect_language_from_ocr_text(best_text)
         if fallback_lang:
             detected_language = fallback_lang
-    
+
     quality = ocr_quality_from_score(best.get("score", 0.0), best.get("confidence", 0.0), best_text)
     best["quality"] = quality
-    
+
     # Add timing metadata to result for logging
     t3 = time.time()
     total_ocr_pipeline_ms = (t3 - t0) * 1000
@@ -962,7 +884,7 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
         f"lang={best.get('lang','?')} psm={best.get('psm','?')} "
         f"conf={best.get('confidence',0):.0f}% score={best.get('score',0):.0f}"
     )
-    
+
     return debug_ocr_flow(best_text, detected_language, best)
 
 
@@ -992,7 +914,7 @@ app = FastAPI(
 )
 
 
-# Demo access key — protects internal endpoints from public use
+# Demo access key - protects internal endpoints from public use
 # Set DEMO_ADMIN_KEY in .env or default to a non-guessable string
 DEMO_ADMIN_KEY = os.getenv("DEMO_ADMIN_KEY", "change-me-in-production")
 
@@ -1028,7 +950,7 @@ OCR_LANGS = "eng+spa+fra+deu+por+ita+chi_sim"
 # If exceeded, the document is marked as FAILED with a timeout message.
 MAX_DOC_PROCESSING_TIME = 60
 
-# Per-call OCR timeout (seconds) — prevents a single Tesseract call from hanging forever.
+# Per-call OCR timeout (seconds) - prevents a single Tesseract call from hanging forever.
 # On Render's 0.25 vCPU, even the slowest multi-lang OCR call should finish in ~15s.
 OCR_PER_CALL_TIMEOUT = 30
 
@@ -1126,7 +1048,7 @@ def ensure_directories():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
-# In-memory document store — avoids disk I/O on every status update
+# In-memory document store - avoids disk I/O on every status update
 # Documents are stored as Document objects keyed by document_id.
 # This is stateless across restarts (appropriate for demo/deployment).
 _document_store: dict[str, Document] = {}
@@ -1162,9 +1084,9 @@ def get_source_type_from_filename(filename: str) -> DocumentSourceType:
     """Determine document source type from file extension"""
     if not filename:
         return DocumentSourceType.UNSUPPORTED
-    
+
     file_ext = os.path.splitext(filename)[1].lower()
-    
+
     if file_ext == '.txt':
         return DocumentSourceType.TEXT_FILE
     elif file_ext in ['.png', '.jpg', '.jpeg']:
@@ -1193,32 +1115,32 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
     Background task to process uploaded document with robust error handling.
     Guarantees document status is always updated to COMPLETED or FAILED.
     """
-    
+
     # Start timing
     start_time = time.time()
     ocr_time = 0
     translation_time = 0
-    
+
     logger.info(f"Starting background processing for document {doc_id}: {filename}")
-    
+
     try:
         # Update status to processing
         update_document(doc_id, {"status": DocumentStatus.PROCESSING})
-        
+
         # Check file extension
         file_ext = os.path.splitext(filename)[1].lower()
-        
+
         if file_ext == '.txt':
             # Process .txt file
             try:
                 with open(stored_path, 'r', encoding='utf-8') as f:
                     text_content = f.read()
-                
+
                 word_count = len(text_content.split())
                 extracted_text = text_content
                 explanation = f"Text document with {word_count} words."
                 detected_language = "unknown"
-                
+
                 updates = {
                     "status": DocumentStatus.COMPLETED,
                     "extracted_text": extracted_text,
@@ -1226,15 +1148,15 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                     "explanation": explanation,
                     "detected_language": detected_language
                 }
-                
+
                 # Apply updates
                 update_document(doc_id, updates)
                 logger.info(f"Background processing COMPLETED for document {doc_id}: text file with {word_count} words")
-                
+
             except Exception as e:
                 logger.error(f"Text file processing failed for {filename}: {e}", exc_info=True)
                 raise  # Re-raise to be caught by outer except
-            
+
         elif file_ext in ['.png', '.jpg', '.jpeg']:
             # Process image file with OCR
             if not OCR_AVAILABLE:
@@ -1245,33 +1167,33 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                 }
                 update_document(doc_id, updates)
                 logger.error(f"Background processing FAILED for document {doc_id}: OCR dependencies not installed")
-                
+
             else:
                 try:
                     processing_deadline = time.time() + MAX_DOC_PROCESSING_TIME
                     update_document(doc_id, {"status": DocumentStatus.PROCESSING, "ocr_status": "loading_image"})
                     # Open and process image
                     image = Image.open(stored_path)
-                    
+
                     # First check if we can read the image at all
                     image.verify()  # Verify image integrity
                     image = Image.open(stored_path)  # Reopen after verify
-                    
+
                     update_document(doc_id, {"ocr_status": "ocr_processing"})
-                    
+
                     # Check timeout before OCR
                     if time.time() >= processing_deadline:
                         raise TimeoutError("Processing exceeded maximum allowed time")
-                    
+
                     # Use improved OCR with language detection
                     ocr_start = time.time()
                     best_text, detected_language, best = run_best_effort_ocr(image, deadline=processing_deadline)
                     ocr_time = (time.time() - ocr_start) * 1000  # Convert to ms
-                    
+
                     # Check timeout after OCR (OCR may have taken too long even if it returned)
                     if time.time() >= processing_deadline:
                         raise TimeoutError("Processing exceeded maximum allowed time")
-                    
+
                     if not best_text or not best_text.strip():
                         # No text found in image
                         updates = {
@@ -1322,36 +1244,36 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                             "location_context": None
                         }
                         update_document(doc_id, updates)
-                        
+
                         # Log timing for empty OCR results
                         total_time = (time.time() - start_time) * 1000
                         logger.info(f"Timing: doc {doc_id} total={total_time:.0f} ms, ocr={ocr_time:.0f} ms, translation=0 ms")
-                        
+
                         logger.info(f"Background processing COMPLETED for document {doc_id}: no text found in image")
-                        
+
                     else:
                         # Text found successfully
                         explanation = f"Text extracted with {best.get('quality', 'unknown')} quality using {best.get('lang', 'unknown')} language model."
-                        
+
                         # Perform document analysis if OCR quality is acceptable
                         analysis_updates = {
                             "document_analysis_enabled": True,
                             "analysis_skipped": False,
                             "analysis_skipped_reason": None
                         }
-                        
+
                         # Check if OCR quality is good enough for analysis
                         # For boards/menus with meaningful text, relax both gates
                         has_meaningful_text = best_text and len(best_text.strip()) >= 40 and best.get("confidence", 0) >= 45
-                        
+
                         if has_meaningful_text:
-                            # Has meaningful dense text — allow analysis with relaxed gates
+                            # Has meaningful dense text - allow analysis with relaxed gates
                             quality_ok = True
                             conf_ok = True
                         else:
                             quality_ok = best.get("quality") not in ("low", None)
                             conf_ok = best.get("confidence", 0) >= 60
-                        
+
                         if quality_ok and conf_ok:
                             # Check timeout before analysis
                             if time.time() >= processing_deadline:
@@ -1360,11 +1282,11 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                                 update_document(doc_id, {"ocr_status": "analyzing"})
                                 logger.info(f"Starting document analysis for document {doc_id}")
                                 analysis_start = time.time()
-                                # Use sync version — avoids creating a new event loop via asyncio.run()
+                                # Use sync version - avoids creating a new event loop via asyncio.run()
                                 analysis_result = analyze_document_content_sync(best_text)
                                 analysis_time = (time.time() - analysis_start) * 1000
                                 logger.info(f"Document analysis completed in {analysis_time:.0f} ms")
-                                
+
                                 # Add analysis results to updates
                                 analysis_updates.update({
                                     "document_type": analysis_result.get("document_type"),
@@ -1391,7 +1313,7 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                                     "case_number": analysis_result.get("case_number"),
                                     "form_identifier": analysis_result.get("form_identifier")
                                 })
-                                
+
                             except Exception as analysis_error:
                                 logger.error(f"Document analysis failed for {doc_id}: {analysis_error}", exc_info=True)
                                 analysis_updates.update({
@@ -1457,7 +1379,7 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                             "hazard_level": None,
                             "location_context": None
                             })
-                        
+
                         updates = {
                             "status": DocumentStatus.COMPLETED,
                             "extracted_text": best_text,
@@ -1470,10 +1392,10 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                         }
                         # Merge analysis updates
                         updates.update(analysis_updates)
-                        
+
                         # Apply updates
                         update_document(doc_id, updates)
-                        
+
                         # Debug logging
                         logger.info(f"Background processing COMPLETED for document {doc_id}")
                         logger.info(f"  - Filename: {filename}")
@@ -1481,11 +1403,11 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                         logger.info(f"  - Confidence: {best.get('confidence')}")
                         logger.info(f"  - Quality: {best.get('quality')}")
                         logger.info(f"  - Text length: {len(best_text)} chars")
-                        
+
                         # Log timing for successful OCR (no translation yet)
                         total_time = (time.time() - start_time) * 1000
                         logger.info(f"Timing: doc {doc_id} total={total_time:.0f} ms, ocr={ocr_time:.0f} ms, translation=0 ms")
-                        
+
                 except Exception as ocr_error:
                     # OCR processing failed
                     logger.error(f"Background processing FAILED for document {doc_id}: OCR error", exc_info=True)
@@ -1493,7 +1415,7 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                     # Check if it's a language pack error
                     if "language" in error_msg.lower() or "lang" in error_msg.lower():
                         error_msg += " (Language packs may not be installed. See README for installation instructions.)"
-                    
+
                     updates = {
                         "status": DocumentStatus.FAILED,
                         "explanation": f"OCR processing failed: {error_msg}",
@@ -1504,11 +1426,11 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
                         "ocr_quality": None
                     }
                     update_document(doc_id, updates)
-                    
+
                     # Log timing for failed OCR
                     total_time = (time.time() - start_time) * 1000
                     logger.info(f"Timing: doc {doc_id} total={total_time:.0f} ms, ocr={ocr_time:.0f} ms, translation=0 ms (FAILED)")
-                    
+
         else:
             # Unsupported file type
             updates = {
@@ -1517,11 +1439,11 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
             }
             update_document(doc_id, updates)
             logger.error(f"Background processing FAILED for document {doc_id}: unsupported file type {file_ext}")
-        
+
     except Exception as e:
         # Catch-all for any unhandled exception
         logger.error(f"Background processing CRITICAL FAILURE for document {doc_id}: {e}", exc_info=True)
-        
+
         # Last-ditch attempt to update status
         try:
             update_document(doc_id, {
@@ -1531,11 +1453,11 @@ def process_document_background(doc_id: str, stored_path: str, filename: str):
         except Exception as update_error:
             # Even updating the status failed - log but can't do more
             logger.critical(f"Cannot update document status for {doc_id}: {update_error}")
-        
+
         # Log timing for critical failure
         total_time = (time.time() - start_time) * 1000
         logger.info(f"Timing: doc {doc_id} total={total_time:.0f} ms (CRITICAL FAILURE)")
-        
+
         # Re-raise to ensure FastAPI logs it
         raise
 
@@ -1587,7 +1509,7 @@ async def upload_document(
     if not file.filename:
         logger.warning("Upload rejected: no filename provided")
         raise HTTPException(status_code=400, detail="Filename is required")
-    
+
     # Validate file extension
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
@@ -1596,7 +1518,7 @@ async def upload_document(
             status_code=422,
             detail=f"Unsupported file type '{file_ext}'. Allowed: .txt, .png, .jpg, .jpeg"
         )
-    
+
     # Validate content type when present
     if file.content_type:
         ct_lower = file.content_type.lower()
@@ -1607,7 +1529,7 @@ async def upload_document(
                     status_code=422,
                     detail=f"Content-Type '{file.content_type}' does not match file extension '{file_ext}'"
                 )
-    
+
     # Check file size (max 10MB for images, 5MB for text)
     file.file.seek(0, 2)
     file_size = file.file.tell()
@@ -1617,12 +1539,12 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"Photo is too large ({file_size / 1024 / 1024:.0f}MB). Maximum is {MAX_IMAGE_BYTES / 1024 / 1024:.0f}MB.")
     if not is_image and file_size > MAX_TEXT_BYTES:
         raise HTTPException(status_code=413, detail=f"Document is too large ({file_size / 1024 / 1024:.0f}MB). Text files must be under {MAX_TEXT_BYTES / 1024 / 1024:.0f}MB.")
-    
+
     # Pre-validate image dimensions before processing
     # Read just the header to get image dimensions without full decode
     if is_image and file_size > 0:
         try:
-            # Check pixel dimensions early — extremely large images can crash or OOM
+            # Check pixel dimensions early - extremely large images can crash or OOM
             with Image.open(file.file) as img_check:
                 max_allowed_dim = 8000  # 8K pixels on any side
                 if img_check.width > max_allowed_dim or img_check.height > max_allowed_dim:
@@ -1642,20 +1564,20 @@ async def upload_document(
             file.file.seek(0)
             # If Image.open fails, the file might be corrupted or a non-image
             logger.warning(f"Image validation failed for {file.filename}: {e}")
-            # Don't reject — let the processing pipeline handle it gracefully
+            # Don't reject - let the processing pipeline handle it gracefully
             pass
         finally:
             file.file.seek(0)
-    
+
     # Save uploaded file
     stored_path = save_uploaded_file(file)
-    
+
     # Create document record
     doc_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     source_type = get_source_type_from_filename(file.filename)
-    
-    
+
+
     document = Document(
         id=doc_id,
         filename=file.filename,
@@ -1665,27 +1587,27 @@ async def upload_document(
         status=DocumentStatus.UPLOADED,
         created_at=now
     )
-    
+
     # Store in-memory (no disk I/O for metadata)
     _document_store[doc_id] = document
-    
+
     # Trigger background processing
     upload_time = (time.time() - upload_t0) * 1000
     logger.info(f"Upload accepted: id={doc_id[:8]}... name={file.filename} type={source_type} size={file_size} handled_in={upload_time:.0f}ms")
-    
+
     background_tasks.add_task(
         process_document_background,
         doc_id,
         stored_path,
         file.filename
     )
-    
+
     return document
 
 
 @app.get("/documents", response_model=List[DocumentResponse])
 async def list_documents(x_admin_key: str = Header(None)):
-    """List all uploaded documents (admin only — requires X-Admin-Key header)"""
+    """List all uploaded documents (admin only - requires X-Admin-Key header)"""
     if x_admin_key != DEMO_ADMIN_KEY:
         logger.warning("List-documents attempt without valid admin key")
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1710,46 +1632,11 @@ MYMEMORY_EMAIL = os.getenv("MYMEMORY_EMAIL")
 
 
 def normalize_lang_code(lang: str | None) -> str:
-    lang = (lang or "").strip().lower()
-    mapping = {
-        "eng": "en",
-        "fra": "fr",
-        "fre": "fr",
-        "deu": "de",
-        "ger": "de",
-        "spa": "es",
-        "por": "pt",
-        "ita": "it",
-        "nld": "nl",
-        "dut": "nl",
-        "rus": "ru",
-        "jpn": "ja",
-        "jpn_vert": "ja",
-        "kor": "ko",
-        "chi_sim": "zh-cn",
-        "chi_tra": "zh-tw",
-        "zho": "zh-cn",
-        "ukr": "uk",
-        "pol": "pl",
-        "ces": "cs",
-        "cze": "cs",
-        "dan": "da",
-        "swe": "sv",
-        "nor": "no",
-        "fin": "fi",
-        "ron": "ro",
-        "rum": "ro",
-        "hun": "hu",
-        "tur": "tr",
-        "ell": "el",
-        "gre": "el",
-        "heb": "he",
-        "ara": "ar",
-        "hin": "hi",
-    }
-    if not lang or lang in {"unknown", "und", "none", "uncertain"}:
-        return ""
-    return mapping.get(lang, lang)
+    """
+    Normalize various language code formats to MyMemory/DeepSeek-compatible codes.
+    Delegates to lang_detect module for comprehensive mapping.
+    """
+    return ld.normalize_lang_code(lang)
 
 async def translate_with_mymemory(text: str, source_lang: str, target_lang: str) -> str | None:
     source_lang = normalize_lang_code(source_lang)
@@ -1848,51 +1735,51 @@ def is_low_quality_ocr(extracted_text: str, ocr_quality: str | None, ocr_confide
     """
     Determine if OCR results are low quality.
     Returns True if text is unreadable or confidence is too low.
-    
+
     NOTE: This determines whether to FULLY block translation.
     For dense text on boards/menus, we still attempt best-effort even
-    if quality is low — the caller checks has_meaningful_text() separately.
+    if quality is low - the caller checks has_meaningful_text() separately.
     """
     # No text at all
     if not extracted_text or not extracted_text.strip():
         return True
-    
+
     # Text is very short (likely gibberish or partial)
     if len(extracted_text.strip()) < 10:
         return True
-    
+
     # Check if text has enough real words (simple heuristic)
     words = extracted_text.strip().split()
     if len(words) < 2:
         return True
-    
+
     # Count alphabetic characters vs total
     alpha_chars = sum(1 for c in extracted_text if c.isalpha())
     total_chars = len(extracted_text)
     if total_chars > 0 and alpha_chars / total_chars < 0.3:
         return True  # Mostly non-alphabetic characters
-    
+
     # Really low confidence (pure garbage)
     if ocr_confidence is not None and ocr_confidence < 20:
         return True
-    
+
     # For medium/long text with reasonable letter ratio, don't block
-    # even if quality is marked "low" — these are boards/menus with partial text
+    # even if quality is marked "low" - these are boards/menus with partial text
     if extracted_text and len(extracted_text.strip()) >= 40:
         alpha_ratio = sum(1 for c in extracted_text if c.isalpha()) / max(len(extracted_text.strip()), 1)
         if alpha_ratio >= 0.4 and len(extracted_text.strip().split()) >= 5:
-            # Has meaningful alphabetic content — don't fully block
+            # Has meaningful alphabetic content - don't fully block
             # The caller will still note low confidence
             return False
-    
+
     # OCR quality explicitly marked as low (fallback for short/weak text)
     if ocr_quality == "low":
         return True
-    
+
     # Very low confidence (fallback)
     if ocr_confidence is not None and ocr_confidence < 55:
         return True
-    
+
     return False
 
 
@@ -1962,7 +1849,7 @@ IMAGE TYPE CATEGORIES (choose the best match or "unknown_document"):
 - public_notice (posted rules, announcements, community board notices)
 - street_sign (street names, directions, traffic-adjacent informational signs)
 - product_label (ingredients, instructions, warnings on products/packages)
-- general_text_image (any other photographed text — menus, posters, flyers, hand-written notes)
+- general_text_image (any other photographed text - menus, posters, flyers, hand-written notes)
 
 FIELD EXTRACTION PRIORITIES BY DOCUMENT TYPE:
 
@@ -2035,7 +1922,7 @@ OUTPUT JSON SCHEMA:
   "location_context": "string or null"
 }
 
-KEY DETAILS POPULATION (CRITICAL — FOLLOW STRICTLY):
+KEY DETAILS POPULATION (CRITICAL - FOLLOW STRICTLY):
 You MUST populate key_details with ALL extracted facts. This is the section users see as "Key Details" in the UI.
 
 If you extract ANY concrete fact (date, time, amount, name, location, identifier, etc.) from the document, it MUST appear in key_details in a human-readable label/value pair.
@@ -2065,24 +1952,24 @@ Examples:
 RULE: If document_summary mentions dates, amounts, names, or locations, those same facts MUST appear as structured entries in key_details.
 
 Include confidence level for each key detail based on clarity in OCR text."""
-    
+
     user_prompt = f"""Analyze this document OCR text:
 
 {extracted_text}
 
 Follow all rules strictly. Return ONLY the JSON object."""
-    
+
     try:
         # First attempt with strict JSON output
         response = await deepseek_chat(system_prompt, user_prompt)
-        
+
         # Try to parse the JSON
         try:
             analysis = json.loads(response)
-            
+
             # Validate required structure
-            required_fields = ["document_type", "document_type_confidence", "document_summary", 
-                             "key_details", "amount_due", "due_date", "sender_name", 
+            required_fields = ["document_type", "document_type_confidence", "document_summary",
+                             "key_details", "amount_due", "due_date", "sender_name",
                              "reference_number", "suggested_actions", "confidence_notes",
                              "appointment_date", "appointment_time", "appointment_location",
                              "provider_name", "patient_name", "bill_period_start",
@@ -2090,12 +1977,12 @@ Follow all rules strictly. Return ONLY the JSON object."""
                              "payments_since_last", "response_deadline", "case_number",
                              "form_identifier",
                              "sign_type_description", "visible_text", "hazard_level", "location_context"]
-            
+
             # Ensure all fields are present (can be null)
             for field in required_fields:
                 if field not in analysis:
                     analysis[field] = None
-            
+
             # Validate key_details structure if present
             if analysis["key_details"]:
                 if not isinstance(analysis["key_details"], list):
@@ -2107,13 +1994,13 @@ Follow all rules strictly. Return ONLY the JSON object."""
                         if isinstance(item, dict) and "label" in item and "value" in item and "confidence" in item:
                             valid_details.append(item)
                     analysis["key_details"] = valid_details if valid_details else None
-            
+
             # HARD GUARANTEE: Auto-populate key_details from structured fields if empty.
             # Also parse the summary text using regex as a fallback for facts the AI
             # mentions in prose but didn't put into structured fields.
             if not analysis.get("key_details"):
                 auto_details = []
-                
+
                 # Step 1: Try structured fields first
                 field_mappings = [
                     ("appointment_date", "Appointment date", None),
@@ -2134,7 +2021,7 @@ Follow all rules strictly. Return ONLY the JSON object."""
                     ("sender_name", "Sender", "medium"),
                     ("reference_number", "Reference number", "medium"),
                 ]
-                
+
                 for field_key, label, default_conf in field_mappings:
                     value = analysis.get(field_key)
                     if value and isinstance(value, str) and value.strip():
@@ -2143,13 +2030,13 @@ Follow all rules strictly. Return ONLY the JSON object."""
                             "value": value,
                             "confidence": default_conf or "medium"
                         })
-                
+
                 # Step 2: Parse the summary text with robust regex patterns.
                 # This handles the common case where the AI writes facts in prose
                 # summary but leaves structured JSON fields null.
                 summary = (analysis.get("document_summary") or "").strip()
                 doc_type = analysis.get("document_type", "") or ""
-                
+
                 # Define extractors as (label, list-of-patterns, fallback_confidence)
                 # Each pattern should capture value in group(1) (or group(1)+group(2) for ranges).
                 # Patterns are tried in order; first match wins.
@@ -2171,20 +2058,20 @@ Follow all rules strictly. Return ONLY the JSON object."""
                         (r'(?:billing|service) period (?:is |of ).*?([A-Z][a-z]+ \d+)[^\d]+(?:to|and|through|-) ([A-Z][a-z]+ \d+,? ?\d{4})', True),
                     ]),
                 ]
-                
+
                 if summary and len(summary) > 20:
                     for label, conf, pattern_list in summary_extractors:
                         # Skip if already found from structured fields
                         if any(d.get("label", "") == label for d in auto_details):
                             continue
-                        
+
                         for pattern_item in pattern_list:
                             is_range = False
                             if isinstance(pattern_item, tuple):
                                 pattern, is_range = pattern_item
                             else:
                                 pattern = pattern_item
-                            
+
                             match = re.search(pattern, summary, re.IGNORECASE)
                             if match:
                                 if is_range and match.lastindex and match.lastindex >= 2:
@@ -2193,33 +2080,33 @@ Follow all rules strictly. Return ONLY the JSON object."""
                                     value = match.group(1).strip() if match.lastindex else match.group(0).strip()
                                 auto_details.append({"label": label, "value": value, "confidence": conf})
                                 break  # stop after first matching pattern for this label
-                    
+
                     # Appointment dates from summary: look for "scheduled for|appointment on Date at Time"
                     appt_date_pat = r'(?:appointment|scheduled) (?:is |for |on )?([A-Z][a-z]+ \d+,? ?\d{4})'
                     appt_time_pat = r'(?:appointment|scheduled|at) (?:for |on |at )?(\d{1,2}:\d{2} ?[AP]M)'
                     appt_loc_pat = r'(?:at|located at|location:?) ([A-Z][a-z]+[A-Za-z ]*(?:Clinic|Hospital|Center|Office|Room \d+))'
-                    
+
                     if not any(d.get("label") == "Appointment date" for d in auto_details):
                         am = re.search(appt_date_pat, summary, re.IGNORECASE)
                         if am:
                             auto_details.append({"label": "Appointment date", "value": am.group(1), "confidence": "medium"})
-                    
+
                     if not any(d.get("label") == "Appointment time" for d in auto_details):
                         atm = re.search(appt_time_pat, summary, re.IGNORECASE)
                         if atm:
                             auto_details.append({"label": "Appointment time", "value": atm.group(1), "confidence": "medium"})
-                    
+
                     if not any(d.get("label") == "Location" for d in auto_details):
                         alm = re.search(appt_loc_pat, summary, re.IGNORECASE)
                         if alm:
                             auto_details.append({"label": "Location", "value": alm.group(1), "confidence": "medium"})
-                
+
                 if auto_details:
                     analysis["key_details"] = auto_details
                     logger.info(f"Auto-populated key_details with {len(auto_details)} items from structured fields + summary")
                     if auto_details:
                         logger.info(f"key_details labels: {[d['label'] for d in auto_details]}")
-            
+
             # Validate suggested_actions if present
             if analysis["suggested_actions"]:
                 if not isinstance(analysis["suggested_actions"], list):
@@ -2227,12 +2114,12 @@ Follow all rules strictly. Return ONLY the JSON object."""
                 else:
                     # Ensure all items are strings
                     analysis["suggested_actions"] = [str(action) for action in analysis["suggested_actions"] if action]
-            
+
             return analysis
-            
+
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse AI response as JSON, attempting repair: {e}")
-            
+
             # Try to extract JSON from the response
             json_match = re.search(r'\{.*\}', response, re.DOTALL)
             if json_match:
@@ -2242,7 +2129,7 @@ Follow all rules strictly. Return ONLY the JSON object."""
                     return analysis
                 except json.JSONDecodeError:
                     pass
-            
+
             # Fallback to safe default
             logger.error("Could not parse or extract JSON from AI response, using fallback")
             return {
@@ -2274,7 +2161,7 @@ Follow all rules strictly. Return ONLY the JSON object."""
                             "hazard_level": None,
                             "location_context": None
             }
-            
+
     except Exception as e:
         logger.error(f"Document analysis failed: {e}")
         # Safe fallback
@@ -2338,7 +2225,7 @@ async def translate_document(document_id: str, request: TranslationRequest):
     mymemory_time = 0
     deepseek_time = 0
     explanation_time = 0
-    
+
     doc = get_document_by_id(document_id)
     if doc is None:
         logger.info(f"Translate miss: id={document_id}")
@@ -2350,16 +2237,16 @@ async def translate_document(document_id: str, request: TranslationRequest):
             status_code=400,
             detail="Cannot translate: no OCR text available for this document."
         )
-    
+
     logger.info(f"Translate start: doc={document_id[:8]}... lang={request.source_language_hint or 'auto'}->{request.target_language}")
-    
+
     # Check if OCR quality is low
     is_low_quality = is_low_quality_ocr(
         doc.extracted_text,
         doc.ocr_quality,
         doc.ocr_confidence
     )
-    
+
     raw_lang = (doc.detected_language or request.source_language_hint or "").strip().lower()
     source_lang = raw_lang if raw_lang and raw_lang not in {"unknown", "und", "none", "auto", "uncertain"} else "auto"
     target_lang = request.target_language
@@ -2383,14 +2270,14 @@ async def translate_document(document_id: str, request: TranslationRequest):
         and doc.document_summary
         and ("low for reliable" in doc.document_summary or "too blurry" in doc.document_summary or "try retaking" in doc.document_summary)
     )
-    
+
     should_best_effort = (is_low_quality and has_meaningful_text and (doc.ocr_confidence or 0) >= 20) or bg_task_stale
 
     if should_best_effort:
         # Best-effort: meaningful partial text, attempt translation anyway
         logger.info(f"Best-effort translate: doc {document_id}, text_len={len(text.strip())}, conf={doc.ocr_confidence}")
-        is_low_quality = False  # Override — proceed to translation
-        
+        is_low_quality = False  # Override - proceed to translation
+
         # Mark as partial quality in confidence notes
         if doc.ocr_quality == "low" or doc.ocr_status in ("low_quality", "low_quality_partial", "good", None) or bg_task_stale:
             new_lang = doc.detected_language
@@ -2413,7 +2300,7 @@ async def translate_document(document_id: str, request: TranslationRequest):
             doc = get_document_by_id(document_id)
 
     if is_low_quality:
-        # Truly low quality — block with retake tips (unchanged behavior)
+        # Truly low quality - block with retake tips (unchanged behavior)
         updates_block = {
             "ocr_status": "low_quality",
             "translation_skipped": True,
@@ -2449,7 +2336,7 @@ async def translate_document(document_id: str, request: TranslationRequest):
             "hazard_level": None,
             "location_context": None
         }
-        
+
         if not doc.retake_tips:
             try:
                 retake_tips = await generate_retake_tips(target_lang=request.target_language)
@@ -2462,9 +2349,9 @@ async def translate_document(document_id: str, request: TranslationRequest):
                     "\u2022 Hold camera steady and parallel to text\n"
                     "\u2022 Tap on text area to focus before shooting"
                 )
-        
+
         update_document(document_id, updates_block)
-        
+
         blocked_text = "Text not clear enough for accurate translation.\n\n"
         if doc.retake_tips or updates_block.get("retake_tips"):
             blocked_text += f"Tips for better photos:\n{updates_block.get('retake_tips') or doc.retake_tips}"
@@ -2476,7 +2363,7 @@ async def translate_document(document_id: str, request: TranslationRequest):
                 "\u2022 Hold camera steady and parallel to text\n"
                 "\u2022 Tap on text area to focus before shooting"
             )
-        
+
         updates_response = {
             "target_language": target_lang,
             "translated_text": blocked_text,
@@ -2486,12 +2373,12 @@ async def translate_document(document_id: str, request: TranslationRequest):
         }
         if not update_document(document_id, updates_response):
             raise HTTPException(status_code=500, detail="Failed to update document")
-        
+
         total_time = (time.time() - start_time) * 1000
         logger.info(f"Translation timing: doc {document_id} total={total_time:.0f} ms (BLOCKED-low-quality)")
-        
+
         return get_document_by_id(document_id)
-    
+
     # --- Normal path: OCR quality is acceptable or best-effort override ---
     if not doc.ocr_status or doc.ocr_status in ("low_quality", "low_quality_partial"):
         update_document(document_id, {"ocr_status": "good"})
@@ -2499,8 +2386,8 @@ async def translate_document(document_id: str, request: TranslationRequest):
 
     translated_text = None
     explanation = None
-    
-    # Try MyMemory translation first (free) — skip if source == target
+
+    # Try MyMemory translation first (free) - skip if source == target
     # MyMemory returns 'PLEASE SELECT TWO DISTINCT LANGUAGES' which is useless
     if source_lang != "auto" and source_lang != target_lang:
         mymemory_start = time.time()
@@ -2510,7 +2397,7 @@ async def translate_document(document_id: str, request: TranslationRequest):
             target_lang
         )
         mymemory_time = (time.time() - mymemory_start) * 1000
-    
+
     # If MyMemory failed or auto language, try DeepSeek
     if not translated_text:
         try:
@@ -2523,14 +2410,14 @@ async def translate_document(document_id: str, request: TranslationRequest):
             deepseek_time = (time.time() - deepseek_start) * 1000
         except Exception as e:
             logger.error(f"DeepSeek translation failed: {e}")
-            # Full text fallback — never silently truncate
+            # Full text fallback - never silently truncate
             # Show source text with language prefix so user still gets something useful
             if len(doc.extracted_text) > 5000:
                 # Truncate only if it's truly huge (unlikely for OCR text)
                 translated_text = f"[{target_lang}] (translation unavailable) " + doc.extracted_text[:5000] + "..."
             else:
                 translated_text = f"[{target_lang}] (translation unavailable) " + doc.extracted_text
-    
+
     # Generate explanation
     if translated_text and not translated_text.startswith(f"[{target_lang}]"):
         try:
@@ -2547,11 +2434,11 @@ async def translate_document(document_id: str, request: TranslationRequest):
     # (the background task may have set them since our initial fetch)
     latest_doc = get_document_by_id(document_id)
     final_conf_notes = latest_doc.confidence_notes if latest_doc else doc.confidence_notes
-    
+
     # Override confidence_notes for best-effort docs
     if latest_doc and latest_doc.ocr_status == "best_effort":
         final_conf_notes = "This photo was partially readable. Some text may be missing or inaccurate due to photo quality."
-    
+
     updates = {
         "target_language": target_lang,
         "translated_text": translated_text,
