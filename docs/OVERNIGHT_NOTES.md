@@ -214,3 +214,38 @@ Comprehensive cleanup + security + bug-fix pass. 109 tests passing, zero regress
 ```
 109 passed in 88.40s — zero regressions
 ```
+
+---
+
+### 🔧 Upload Validation, Response Model, & Frontend Hardening (2026-05-11 9:50 PM MDT)
+
+#### Changes
+| Item | Details |
+|---|---|
+| **Magic-byte validation for uploads** | `validate_file_magic()` reads file header bytes: PNG (`\x89PNG...`) and JPEG (`\xff\xd8\xff`) headers verified. `.txt` files checked for null bytes + UTF-8 validity. Rejects renamed executables / polyglot attacks. |
+| **`stored_path` excluded from API responses** | `DocumentResponse` uses `Field(exclude=True)` — internal filesystem path no longer exposed in `/documents/*` responses. |
+| **Frontend XSS hardening** | `fmt()` function now HTML-escapes (`&`, `<`, `>`, `"`) before converting markdown to `<strong>`/`<em>`. Prevents injected `<script>` tags in translated text or explanations. |
+| **Upload cleanup mechanism** | `cleanup_old_files()` deletes oldest uploads when count exceeds 500. Prevents disk space exhaustion in long-running demo deployments. |
+| **Path traversal protection** | `save_uploaded_file()` uses `os.path.realpath()` cross-check to verify stored path is within `UPLOADS_DIR`. Strips path separators from extension. |
+| **Document ID validation** | `get_document_by_id()` returns `None` for doc IDs containing `..`, `/`, or `\\`. Prevents key injection / path traversal attempts on public endpoints. |
+| **`.env.example` cleaned up** | Added `DEBUG_OCR=false`. Removed `HOST`, `PORT`, `LOG_LEVEL` — not used by code. |
+
+#### Commits
+1. `5938136` — fix: harden file upload validation, response model, and frontend XSS
+2. `6f6b19b` — fix: add upload cleanup, path traversal protection, and doc ID validation
+
+#### Test Results
+```
+109 passed in 92.00s — zero regressions
+```
+
+#### Open Items (remaining from full audit)
+| Issue | Severity | Status |
+|---|---|---|
+| **No server-side rate limiting** | Low-Medium | Deferred — SlowAPI/throttle integration not suitable for single-instance demo. Risk is bounded by Render's 512MB RAM + file size limits. |
+| **`/documents/{id}` is fully public** | Medium (product) | Intentional for demo polling. Future paid product needs ownership/bearer checks. |
+| **No .txt upload magic-byte validation for large files** | Low | `validate_file_magic()` only checks first 512 bytes. Extremely large text files with binary content in later pages could slip through. Mitigation: text files are read as UTF-8 in background task (would fail cleanly). |
+| **`DEMO_ADMIN_KEY` default still `change-me-in-production`** | Medium | Documented in README. Needs strong random default for template deployments. |
+| **`DEEPSEEK_API_KEY` not set on Render** | Low | Falls back to MyMemory gracefully. All translations work. |
+| **`manage-simple.sh` vs `manage.sh`** | Low | Near-duplicate scripts. Combined cleanup deferred. |
+| **`MYMEMORY_EMAIL` placeholder** | Low | Documented in `.env.example`. Not a security issue. |
