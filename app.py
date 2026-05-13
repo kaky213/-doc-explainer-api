@@ -288,8 +288,16 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
             timeout=5
         )
         import re
+        # Parse OSD output
         angle_match = re.search(r"Rotate: (\d+)", osd)
-        if angle_match:
+        conf_match = re.search(r"Orientation confidence: ([\d.]+)", osd)
+        script_conf_match = re.search(r"Script confidence: ([\d.]+)", osd)
+
+        # Only trust OSD if orientation confidence >= 2.0 (tesseract scale: 0-10+)
+        # Low confidence (<2.0) means OSD is guessing — do not rotate.
+        orient_conf = float(conf_match.group(1)) if conf_match else 0.0
+
+        if angle_match and angle_match and orient_conf >= 2.0:
             angle = int(angle_match.group(1))
             if angle in [90, 180, 270]:
                 result_img = cv2.rotate(gray if img_array.ndim == 2 else img_array,
@@ -301,6 +309,8 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
                 updates["rotation_angle"] = angle
                 info["deskew_rotation"] = angle
                 return result_img, updates
+            else:
+                logger.debug(f"OSD says orientation=0, not rotating")
     except Exception:
         logger.debug("OSD failed on small/noisy image, continuing")
 
@@ -343,9 +353,17 @@ def autorotate_multipass(img_array, info: dict) -> tuple:
 
 def preprocess_for_ocr(pil_image):
     """
-    Resize, enhance contrast, and normalize an image for OCR.
+    Resize (with upscaling for small images), enhance contrast adaptively,
+    and normalize an image for OCR.
     Returns (preprocessed_pil, info_dict)
+
+    Changes from original:
+    - Safe resize: upscales small images (screenshots, low-res photos) via Lanczos
+    - Adaptive CLAHE: tunes clipLimit based on image contrast (std dev)
+    - Same multi-strategy orientation correction
     """
+    import numpy as np
+    import cv2
     img = np.array(pil_image)
     # Handle edge cases: mock objects in tests, empty arrays, 1D arrays
     if not isinstance(img, np.ndarray) or img.ndim == 0 or img.size == 0:
@@ -363,26 +381,20 @@ def preprocess_for_ocr(pil_image):
         gray = np.ones((100, 100), dtype=np.uint8) * 255
 
     h, w = gray.shape[:2]
-    max_dim = 1200  # 1200px max side - plenty for OCR, 2-4x faster than 2000
     info = {"original_dims": (w, h)}
 
-    # Step 1: Downscale large images to max 2000px on longest side
-    if max(h, w) > max_dim:
-        scale = max_dim / max(h, w)
-        new_w, new_h = int(w * scale), int(h * scale)
-        gray = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        info["resized_dims"] = (new_w, new_h)
-        info["resize_scale"] = round(scale, 3)
-    else:
-        info["resized_dims"] = (w, h)
-        info["resize_scale"] = 1.0
+    # Step 1: Safe resize — downscale large, upscale tiny
+    # Convert to PIL for consistent LANCZOS interpolation
+    temp_pil = Image.fromarray(gray)
+    resized_pil, resize_info = safe_resize_no_downscale(temp_pil, max_dim=2000)
+    info.update(resize_info)
+    gray = np.array(resized_pil)
 
-    # Step 2: CLAHE contrast enhancement (improves real-world photos significantly)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
+    # Step 2: Adaptive CLAHE contrast enhancement
+    enhanced, clahe_info = adaptive_clahe(gray)
+    info["clahe"] = clahe_info
 
     # Step 3: Multi-strategy orientation correction
-    # Tries OSD, EXIF, histogram-based detection and picks best result
     enhanced, rot_updates = autorotate_multipass(enhanced, info)
     if rot_updates.get("rotated_by"):
         info["deskew_rotation"] = rot_updates["rotation_angle"]
@@ -442,6 +454,17 @@ def build_ocr_variants(pil_image):
     # Uses alpha=2.0 beta=-30 for strong contrast stretch
     high_contrast = cv2.convertScaleAbs(gray, alpha=2.0, beta=-30)
     variants["high_contrast"] = high_contrast
+
+    # 7. Morphological close - fills small gaps in broken characters
+    # Helps with thin/faint text and low-quality photos
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    morphed = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel, iterations=1)
+    variants["morph_close"] = morphed
+
+    # 8. Bilateral filter - preserves edges while reducing noise
+    # Better than medianBlur for photos with fine text
+    bilateral = cv2.bilateralFilter(gray, 9, 75, 75)
+    variants["bilateral"] = bilateral
 
     return variants
 
@@ -589,9 +612,9 @@ def detect_text_roi(pil_image):
                 }
                 return roi_pil, roi_info
 
-        # Fallback 1: central crop (5% from each side - keeps most edge text)
-        margin_x = int(w * 0.05)
-        margin_y = int(h * 0.05)
+        # Fallback 1: central crop (2% from each side - barely trims edges)
+        margin_x = int(w * 0.02)
+        margin_y = int(h * 0.02)
         if margin_x * 2 < w and margin_y * 2 < h:
             roi = gray[margin_y:h-margin_y, margin_x:w-margin_x]
             roi_pil = Image.fromarray(roi)
@@ -617,6 +640,340 @@ def detect_text_roi(pil_image):
         "reason": "fallback"
     }
     return pil_image, roi_info
+
+
+def detect_columns(pil_image):
+    """
+    Detect multi-column layout in a document image.
+    Uses vertical projection profile analysis.
+
+    Returns dict: {
+        "is_multi_column": bool,
+        "columns": [{"x": int, "y": int, "w": int, "h": int}, ...],  # column bounding boxes
+        "method": "projection" | "contour" | "none",
+        "column_count": int,
+        "column_widths": [int, ...],
+        "gaps": [int, ...],  # pixel gaps between columns
+    }
+    """
+    try:
+        import numpy as np
+        import cv2
+
+        img = np.array(pil_image)
+        if not isinstance(img, np.ndarray) or img.ndim < 2 or img.size == 0:
+            return {"is_multi_column": False, "columns": [], "method": "none", "column_count": 1}
+
+        if img.ndim == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img
+
+        h, w = gray.shape[:2]
+
+        # Strategy 1: Projection-based column detection
+        # Threshold to binary
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Invert so text pixels are 1 (not 0)
+        binary = 255 - binary
+
+        # Vertical projection: sum of text pixels per column
+        vert_proj = np.sum(binary, axis=0) // 255  # shape (w,)
+
+        # Normalize projection to [0, 1]
+        max_proj = np.max(vert_proj)
+        if max_proj < 10:
+            return {"is_multi_column": False, "columns": [], "method": "none", "column_count": 1}
+        proj_norm = vert_proj / max_proj
+
+        # Find gaps: regions where vertical projection drops below threshold
+        gap_threshold = 0.15  # 15% of max projection = likely column gap
+        in_gap = proj_norm < gap_threshold
+
+        # Find contiguous gap regions
+        # A real column gap should be > 1.5% of image width
+        min_gap_px = max(int(w * 0.015), 15)
+
+        gaps = []
+        gap_start = None
+        for x in range(w):
+            if in_gap[x]:
+                if gap_start is None:
+                    gap_start = x
+            else:
+                if gap_start is not None:
+                    gap_width = x - gap_start
+                    if gap_width >= min_gap_px:
+                        gaps.append((gap_start, x))
+                    gap_start = None
+        if gap_start is not None:
+            gap_width = w - gap_start
+            if gap_width >= min_gap_px:
+                gaps.append((gap_start, w))
+
+        # Filter margin gaps (first and last 10% of page)
+        margin = int(w * 0.10)
+        interior_gaps = [(s, e) for s, e in gaps if s > margin and e < w - margin]
+
+        # If we have interior gaps, it's multi-column
+        if interior_gaps:
+            # Build column regions from gaps
+            column_regions = []
+            prev_end = 0
+            for gap_start, gap_end in interior_gaps:
+                if gap_start - prev_end > min_gap_px:
+                    column_regions.append({
+                        "x": prev_end,
+                        "y": 0,
+                        "w": gap_start - prev_end,
+                        "h": h,
+                    })
+                prev_end = gap_end
+            # Last column after last gap
+            if w - prev_end > min_gap_px:
+                column_regions.append({
+                    "x": prev_end,
+                    "y": 0,
+                    "w": w - prev_end,
+                    "h": h,
+                })
+
+            if len(column_regions) >= 2:
+                return {
+                    "is_multi_column": True,
+                    "columns": column_regions,
+                    "method": "projection",
+                    "column_count": len(column_regions),
+                    "column_widths": [c["w"] for c in column_regions],
+                    "gaps": [(s, e) for s, e in interior_gaps],
+                }
+
+        # Strategy 2: Contour-based column detection (fallback)
+        # Find text contours and cluster by x-position
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        dilated = cv2.dilate(binary, kernel, iterations=3)
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Filter small contours
+        min_area = h * w * 0.005
+        text_boxes = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < min_area:
+                continue
+            x, y, bw, bh = cv2.boundingRect(c)
+            text_boxes.append((x, y, bw, bh))
+
+        if len(text_boxes) >= 10:
+            # Cluster by x-center using dbscan-like approach
+            x_centers = [b[0] + b[2] // 2 for b in text_boxes]
+            x_sorted = sorted(x_centers)
+
+            # Find gaps between clusters
+            x_gaps = []
+            x_diffs = [x_sorted[i + 1] - x_sorted[i] for i in range(len(x_sorted) - 1)]
+            if x_diffs:
+                median_diff = np.median(x_diffs)
+                gap_threshold_px = median_diff * 4
+                for i, diff in enumerate(x_diffs):
+                    if diff > gap_threshold_px:
+                        x_gaps.append((x_sorted[i], x_sorted[i + 1]))
+
+            if len(x_gaps) >= 1:
+                # Single gap = 2 columns
+                return {
+                    "is_multi_column": len(x_gaps) >= 1,
+                    "columns": [],  # Use projection-based regions if available
+                    "method": "contour",
+                    "column_count": len(x_gaps) + 1,
+                    "column_widths": [],
+                    "gaps": x_gaps,
+                }
+
+    except Exception as e:
+        logger.debug(f"Column detection failed: {e}")
+
+    return {"is_multi_column": False, "columns": [], "method": "none", "column_count": 1}
+
+
+DEBUG_PREPROCESS_DIR = None
+
+
+def save_debug_image(pil_image, name: str, debug_flag: bool = False):
+    """
+    Save a debug copy of an image during preprocessing.
+    Only saves when DEBUG_PREPROCESS_DIR is set.
+
+    Enable with: setattr(app, '_doc_debug_dir', '/tmp/doc-explainer-debug')
+    Or set DEBUG_IMAGE_PREPROCESS=true env var.
+    """
+    import os
+    debug_dir = None
+    if os.getenv("DEBUG_IMAGE_PREPROCESS", "").lower() in ("true", "1", "yes"):
+        debug_dir = "/tmp/doc-explainer-debug"
+    if not debug_dir:
+        return
+    os.makedirs(debug_dir, exist_ok=True)
+    try:
+        sanitized = name.replace(" ", "_").replace("/", "_")
+        path = os.path.join(debug_dir, sanitized)
+        pil_image.save(path)
+        if DEBUG_OCR:
+            logger.info(f"Debug image saved: {path}")
+    except Exception as e:
+        logger.warning(f"Failed to save debug image {name}: {e}")
+
+
+def safe_resize_no_downscale(pil_image, max_dim: int = 2000):
+    """
+    Resize an image for OCR with a safe strategy:
+    - If image is larger than max_dim, downscale to max_dim.
+    - If image is smaller than upscale_threshold, upscale 2x via Lanczos.
+    - Otherwise keep original.
+
+    Returns (resized_pil, info_dict)
+    """
+    w, h = pil_image.size
+    max_side = max(h, w)
+    min_side = min(h, w)
+    info = {"original_dims": (w, h)}
+
+    # Downscale large images
+    if max_side > max_dim:
+        scale = max_dim / max_side
+        new_w, new_h = int(w * scale), int(h * scale)
+        resized = pil_image.resize((new_w, new_h), Image.LANCZOS)
+        info["resized_dims"] = (new_w, new_h)
+        info["resize_scale"] = round(scale, 3)
+        info["resize_reason"] = "downscale"
+        return resized, info
+
+    # Upscale very small images (screenshots, low-res photos of documents)
+    upscale_threshold = cfg.OCR_UPSCALE_THRESHOLD
+    if max_side < upscale_threshold:
+        scale = min(upscale_threshold / max_side, 3.0)  # cap at 3x
+        new_w, new_h = int(w * scale), int(h * scale)
+        resized = pil_image.resize((new_w, new_h), Image.LANCZOS)
+        info["resized_dims"] = (new_w, new_h)
+        info["resize_scale"] = round(scale, 3)
+        info["resize_reason"] = "upscale"
+        return resized, info
+
+    info["resized_dims"] = (w, h)
+    info["resize_scale"] = 1.0
+    info["resize_reason"] = "none"
+    return pil_image, info
+
+
+def adaptive_clahe(gray_img):
+    """
+    Apply CLAHE with adaptive parameters based on image contrast AND brightness.
+    Low-contrast images get stronger enhancement; high-contrast get gentler.
+    Already-bright images (mean > 230) with faint text get gentler treatment
+    to avoid amplifying noise over text.
+
+    Returns enhanced grayscale image.
+    """
+    std_dev = float(np.std(gray_img))
+    mean_val = float(np.mean(gray_img))
+
+    # On very bright images (mean > 230) with low std deviation, the text is
+    # thin dark marks on near-white paper. Aggressive CLAHE amplifies noise
+    # and can wash out the text. Use gentler enhancement instead.
+    if mean_val > 230 and std_dev < 25:
+        clip_limit = 2.0
+        tile_size = (8, 8)
+    elif std_dev < 30:
+        # Very low contrast - strong enhancement
+        clip_limit = 4.0
+        tile_size = (6, 6)
+    elif std_dev < 60:
+        # Moderate contrast - default
+        clip_limit = 3.0
+        tile_size = (8, 8)
+    else:
+        # High contrast - gentle enhancement (avoid over-enhancing already clear text)
+        clip_limit = 2.0
+        tile_size = (10, 10)
+
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_size)
+    enhanced = clahe.apply(gray_img)
+    return enhanced, {"clip_limit": clip_limit, "tile_size": tile_size, "std_dev": round(std_dev, 1), "mean": round(mean_val, 1)}
+
+
+def whitelist_ocr_pass(pil_image, lang="eng"):
+    """
+    Targeted OCR pass with char whitelist for numeric/structured data.
+    Uses PSM 6 (uniform block) with whitelist config to catch account numbers,
+    amounts, dates, and other structured fields that the main OCR might miss.
+
+    Returns {"text": str, "confidence": float} or None if no text found.
+    """
+    if not OCR_AVAILABLE:
+        return None
+
+    import pytesseract
+    import numpy as np
+
+    # Whitelist: digits, common currency/decimal/date separators, basic alphabet
+    # This dramatically reduces false positives for numeric fields
+    whitelist = "0123456789.$£€¥,-/:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz%#()"
+    config = f"--oem 3 --psm 6 -c tessedit_char_whitelist={whitelist}"
+
+    try:
+        data = pytesseract.image_to_data(
+            pil_image,
+            lang=lang,
+            config=config,
+            output_type=pytesseract.Output.DICT
+        )
+    except Exception:
+        return None
+
+    n = len(data.get("text", []))
+    lines = {}
+    for i in range(n):
+        raw = data["text"][i] or ""
+        txt = raw.strip()
+        if not txt:
+            continue
+        try:
+            ln = int(data.get("line_num", [0])[i])
+        except Exception:
+            ln = 0
+        try:
+            left = int(data.get("left", [0])[i])
+        except Exception:
+            left = 0
+        try:
+            c = float(data.get("conf", ["-1"])[i])
+        except Exception:
+            c = -1.0
+        if ln not in lines:
+            lines[ln] = []
+        lines[ln].append((left, txt, c))
+
+    line_texts = []
+    line_confs = []
+    for ln in sorted(lines.keys()):
+        words = sorted(lines[ln], key=lambda x: x[0])
+        texts = [w[1] for w in words]
+        confs = [w[2] for w in words if w[2] >= 0]
+        if not texts:
+            continue
+        line_text = " ".join(texts).strip()
+        # Keep all lines from whitelist pass - they're targeted
+        line_texts.append(line_text)
+        if confs:
+            line_confs.append(sum(confs) / len(confs))
+
+    text = "\n".join(line_texts).strip()
+    if not text:
+        return None
+
+    conf = sum(line_confs) / len(line_confs) if line_confs else 0.0
+    return {"text": text, "conf": conf}
 
 
 def run_best_effort_ocr(pil_image, deadline: float = None):
@@ -649,7 +1006,84 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
                    f"original={roi_info.get('original_size')}, "
                    f"roi={roi_info.get('roi_size')}")
 
-    # Step 3: Build OCR variants from ROI
+    # Step 3: Multi-column detection (only if ROI wasn't too narrow)
+    column_info = {"is_multi_column": False, "column_count": 1}
+    if "roi_size" in roi_info and roi_info.get("roi_size", (0, 0))[0] >= 300:
+        column_info = detect_columns(roi_pil)
+        if column_info["is_multi_column"] and DEBUG_OCR:
+            logger.info(f"Multi-column detected: {column_info['column_count']} columns, "
+                       f"gaps at {column_info.get('gaps', '?')}")
+
+    # Step 4: If multi-column, OCR each column independently, then build variants from full ROI
+    # For multi-column: we OCR each column separately with PSM 6, plus do a full-page pass
+    multi_column_results = []
+    if column_info["is_multi_column"] and column_info["column_count"] >= 2:
+        col_psm = 6  # uniform block within one column
+        for col_idx, col in enumerate(column_info.get("columns", [])):
+            x, y, cw, ch = col["x"], col["y"], col["w"], col["h"]
+            if cw < 100 or ch < 100:
+                continue
+            col_rgb = np.array(roi_pil)
+            if col_rgb.ndim == 3:
+                col_gray = cv2.cvtColor(col_rgb, cv2.COLOR_RGB2GRAY)
+            else:
+                col_gray = col_rgb
+            col_crop = col_gray[y:y+ch, x:x+cw]
+            col_pil = Image.fromarray(col_crop)
+            try:
+                data = pytesseract.image_to_data(
+                    col_pil, lang="eng",
+                    config=f"--oem 3 --psm {col_psm}",
+                    output_type=pytesseract.Output.DICT
+                )
+                # Inline scoring for multi-column (same logic as _score_ocr_data)
+                n = len(data.get("text", []))
+                col_lines = {}
+                for i in range(n):
+                    raw = data["text"][i] or ""
+                    txt = raw.strip()
+                    if not txt:
+                        continue
+                    try:
+                        ln = int(data.get("line_num", [0])[i])
+                    except Exception:
+                        ln = 0
+                    try:
+                        left = int(data.get("left", [0])[i])
+                    except Exception:
+                        left = 0
+                    if ln not in col_lines:
+                        col_lines[ln] = []
+                    col_lines[ln].append((left, txt))
+                col_texts = []
+                for ln in sorted(col_lines.keys()):
+                    words = sorted(col_lines[ln], key=lambda x: x[0])
+                    col_texts.append(" ".join(w[1] for w in words).strip())
+                col_text = "\n".join(col_texts).strip()
+                if col_text:
+                    multi_column_results.append({
+                        "text": col_text,
+                        "col": col_idx,
+                    })
+            except Exception as e:
+                logger.debug(f"Column {col_idx} OCR failed: {e}")
+
+        if multi_column_results and DEBUG_OCR:
+            logger.info(f"Multi-column OCR: {len(multi_column_results)} columns with text")
+
+    # Save debug images if enabled
+    if os.getenv("DEBUG_IMAGE_PREPROCESS", "").lower() in ("true", "1", "yes"):
+        save_debug_image(roi_pil, "03_roi.png")
+        if column_info["is_multi_column"] and column_info.get("columns"):
+            import cv2
+            col_vis = np.array(roi_pil)
+            if col_vis.ndim == 2:
+                col_vis = cv2.cvtColor(col_vis, cv2.COLOR_GRAY2RGB)
+            for col in column_info["columns"]:
+                cv2.rectangle(col_vis, (col["x"], col["y"]), (col["x"]+col["w"], col["y"]+col["h"]), (0, 255, 0), 2)
+            save_debug_image(Image.fromarray(col_vis), "04_columns.png")
+
+    # Step 5: Build OCR variants from full ROI (for single-column / mixed layout)
     variants = build_ocr_variants(roi_pil)
 
     n_variants = len(variants)
@@ -660,8 +1094,8 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
     # Tier 1: "eng" only (fastest path, covers ~95% of documents).
     # Tier 2: script-aware fallback (Cyrillic, Arabic, Devanagari, CJK).
     # Tier 3: cfg.GENERAL_FALLBACK_LANGS — all combos defined in config.py.
-    psm_candidates = [6, 11]  # 6=uniform block, 11=sparse text
-    psm_candidates = [6, 11]  # 6=uniform block, 11=sparse text
+    # PSM candidates ordered by flexibility: 3=auto, 4=single column, 6=uniform block, 11=sparse, 12=variable block
+    psm_candidates = [3, 4, 6, 11, 12]
 
     best = {
         "text": "",
@@ -736,13 +1170,24 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
             line_text = " ".join(texts).strip()
             alpha_words = [t for t in texts if sum(ch.isalpha() for ch in t) >= 2]
             alpha_chars = sum(ch.isalpha() for ch in line_text)
+            # Numeric data check: lines with amounts, dates, account numbers
+            import re
+            numeric_chars = sum(ch.isdigit() for ch in line_text)
+            has_currency = bool(re.search(r'[\$£€¥¥]', line_text))
+            has_date_like = bool(re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', line_text))
+            has_amount = bool(re.search(r'\$?\d{1,6}[.,]?\d{0,2}', line_text))
+            has_account = bool(re.search(r'[A-Z]?\d{6,}', line_text))
+            has_alpha_heavy = alpha_chars >= 3
             keep_line = False
-            if avg_conf < 0:
-                keep_line = alpha_chars >= 6 and len(alpha_words) >= 2
+            # Numeric/semi-numeric lines (account numbers, amounts, dates) are always kept
+            if numeric_chars >= 6 and (has_currency or has_amount or has_account or has_date_like):
+                keep_line = True
+            elif avg_conf < 0:
+                keep_line = (alpha_chars >= 6 and len(alpha_words) >= 2) or numeric_chars >= 8
             elif avg_conf >= 55:
-                keep_line = alpha_chars >= 4
+                keep_line = alpha_chars >= 4 or numeric_chars >= 4
             elif avg_conf >= 40:
-                keep_line = alpha_chars >= 6 and len(alpha_words) >= 2
+                keep_line = (alpha_chars >= 6 and len(alpha_words) >= 2) or numeric_chars >= 6
             if keep_line:
                 line_texts.append(line_text)
                 if avg_conf >= 0:
@@ -879,6 +1324,43 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
         if fallback_lang:
             detected_language = fallback_lang
 
+    # Step: Merge multi-column results if available
+    if multi_column_results:
+        # Sort columns left-to-right (by col index)
+        multi_column_results.sort(key=lambda x: x.get("col", 0))
+        col_merged = "\n\n".join(r["text"] for r in multi_column_results if r.get("text"))
+        # Only use if we found significant text from columns
+        col_char_count = sum(len(r.get("text", "")) for r in multi_column_results)
+        if col_char_count > len(best_text) * 1.5 or (not best.get("text") and col_char_count > 0):
+            if DEBUG_OCR:
+                logger.info(f"Multi-column result used: {col_char_count} chars vs main {len(best_text)} chars")
+            best_text = col_merged
+            best["text"] = col_merged
+            best["score"] = max(best.get("score", 0), 15)
+            best["confidence"] = max(best.get("confidence", 0), 40)
+            best["multi_column_used"] = True
+            best["column_count"] = len(multi_column_results)
+
+    # Step: Whitelist pass for numeric/structured data
+    # Do this on the preprocessed image (not ROI, to catch margin data)
+    whitelist_result = whitelist_ocr_pass(preprocessed, lang="eng")
+    if whitelist_result and whitelist_result["text"]:
+        wl_text = whitelist_result["text"]
+        wl_lines = [ln.strip() for ln in wl_text.split("\n") if ln.strip()]
+        # Only keep lines that are primarily numeric (good for amounts, dates, account#)
+        import re as _re
+        numeric_wl = [ln for ln in wl_lines if _re.search(r'^[$£€¥¥]?\d+[.,]?\d*\s*$', ln) or
+                     _re.search(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s*$', ln) or
+                     _re.search(r'[A-Z]\d{5,}', ln) or
+                     (sum(1 for c in ln if c.isdigit()) >= 6 and
+                      sum(1 for c in ln if c.isspace() or c.isdigit() or c in '$£€¥¥.,/-:%') >= len(ln) * 0.6)]
+        if numeric_wl and not any(ln in best_text for ln in numeric_wl):
+            # Append whitelist results as separate section (they're structured fields, not prose)
+            best_text = best_text + "\n\n--- Numeric Fields ---\n" + "\n".join(numeric_wl)
+            best["text"] = best_text
+            if DEBUG_OCR:
+                logger.info(f"Whitelist pass added {len(numeric_wl)} numeric lines to output")
+
     quality = ocr_quality_from_score(best.get("score", 0.0), best.get("confidence", 0.0), best_text)
     best["quality"] = quality
 
@@ -890,6 +1372,7 @@ def run_best_effort_ocr(pil_image, deadline: float = None):
         f"calls={n_total_calls} ({ocr_call_time:.0f}ms) "
         f"total={total_ocr_pipeline_ms:.0f}ms "
         f"variants={n_variants} "
+        f"multi={len(multi_column_results)}col "
         f"lang={best.get('lang','?')} psm={best.get('psm','?')} "
         f"conf={best.get('confidence',0):.0f}% score={best.get('score',0):.0f}"
     )
@@ -1027,6 +1510,7 @@ class DocumentBase(BaseModel):
     hazard_level: Optional[str] = None
     location_context: Optional[str] = None
     target_language: Optional[str] = None
+    quality_warning: Optional[str] = None
     extracted_text: Optional[str] = None
     translated_text: Optional[str] = None
     explanation: Optional[str] = None
@@ -2560,6 +3044,16 @@ async def translate_document(document_id: str, request: TranslationRequest):
     if latest_doc and latest_doc.ocr_status == "best_effort":
         final_conf_notes = "This photo was partially readable. Some text may be missing or inaccurate due to photo quality."
 
+    # Determine quality warning for frontend display
+    latest_doc_for_warning = latest_doc or doc
+    ocr_qual = latest_doc_for_warning.ocr_quality or "unknown"
+    ocr_conf_val = latest_doc_for_warning.ocr_confidence or 0.0
+    partial_warning = None
+    if ocr_qual == "low":
+        partial_warning = "This text was partially readable — some content may be missing or incorrect. Check the original photo if something looks off."
+    elif ocr_qual == "medium" or (30 <= ocr_conf_val < 55):
+        partial_warning = "Some text may be slightly garbled due to photo quality. The main content should be correct."
+
     updates = {
         "target_language": target_lang,
         "translated_text": translated_text,
@@ -2567,6 +3061,7 @@ async def translate_document(document_id: str, request: TranslationRequest):
         "translation_skipped": False,
         "reason": None,
         "confidence_notes": final_conf_notes,
+        "quality_warning": partial_warning,
     }
 
     if not update_document(document_id, updates):

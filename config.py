@@ -26,9 +26,14 @@ MAX_DOC_PROCESSING_TIME = 60
 OCR_PER_CALL_TIMEOUT = 30
 
 # Image preprocessing
-MAX_IMAGE_DIMENSION = 1200  # downscale images to this max side for OCR
+MAX_IMAGE_DIMENSION = 2000  # downscale images to this max side for OCR (2000px keeps fine print readable)
 MAX_IMAGE_DIMENSION_UPLOAD = 8000  # reject uploads larger than this on any side
 MIN_IMAGE_DIMENSION_UPLOAD = 20  # reject uploads smaller than this
+
+# Upscaling: if longest side is below this threshold, 2x upscale before OCR
+# (helps preserve small text on low-resolution images/screenshots)
+MIN_DPI_TEXT_SIZE = 50  # minimum pixel height for readable text (heuristic)
+OCR_UPSCALE_THRESHOLD = 800  # if max side < this, upscale 2x via Lanczos
 
 # ============================================================
 # Supported languages

@@ -377,7 +377,11 @@ class DocTranslateApp {
     // Add quality warning banner for low-confidence reads
     const qualityBanner = document.getElementById('qualityWarning');
     if (qualityBanner) {
-      if (lowQuality) {
+      const qw = doc.quality_warning;
+      if (qw) {
+        qualityBanner.classList.remove('hidden');
+        qualityBanner.textContent = '⚠ ' + qw;
+      } else if (lowQuality) {
         qualityBanner.classList.remove('hidden');
         qualityBanner.textContent = '⚠ Partially readable — some content may be missing or incorrect. Check the original photo if something looks off.';
       } else if (noText) {
